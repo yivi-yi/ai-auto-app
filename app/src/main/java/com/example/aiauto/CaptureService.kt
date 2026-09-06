@@ -88,8 +88,14 @@ class CaptureService : Service() {
             bmp.copyPixelsFromBuffer(buffer)
             val cropped = if (rowPadding == 0) bmp else Bitmap.createBitmap(bmp, 0, 0, width, height)
             if (cropped != bmp) bmp.recycle()
-            val f = File(filesDir, "shot_${System.currentTimeMillis()}.png")
-            f.outputStream().use { cropped.compress(Bitmap.CompressFormat.PNG, 90, it) }
+            val maxW = 720
+            val scale = if (cropped.width > maxW) maxW.toFloat() / cropped.width else 1f
+            val w = (cropped.width * scale).toInt()
+            val h = (cropped.height * scale).toInt()
+            val scaled = if (scale < 1f) Bitmap.createScaledBitmap(cropped, w, h, true) else cropped
+            val f = File(filesDir, "shot_${System.currentTimeMillis()}.jpg")
+            f.outputStream().use { scaled.compress(Bitmap.CompressFormat.JPEG, 60, it) }
+            if (scaled != cropped) scaled.recycle()
             cropped.recycle()
             lastShot = f
             return f

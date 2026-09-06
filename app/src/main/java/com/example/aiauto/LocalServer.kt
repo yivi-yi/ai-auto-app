@@ -81,7 +81,7 @@ class LocalServer(private val port: Int) {
                     send(it, 200, "application/json", statusJson())
                 } else if (path == "/ui") {
                     val arr = uiBlocking()
-                    send(it, 200, "application/json", if (arr != null) arr.toString() else Json.err("no ui"))
+                    send(it, 200, "application/json", arr?.toString() ?: "[]")
                 } else if (path == "/clickNode" && method == "POST") {
                     val j = JSONObject(String(body))
                     val ok = clickNodeBlocking(j.optString("text"))
@@ -97,7 +97,7 @@ class LocalServer(private val port: Int) {
                 } else if (path == "/screenshot") {
                     val f = CaptureService.lastShot
                     if (f != null && f.exists()) {
-                        send(it, 200, "image/png", f.readBytes())
+                        send(it, 200, "image/jpeg", f.readBytes())
                     } else {
                         send(it, 500, "application/json", Json.err("no screenshot"))
                     }
@@ -123,6 +123,8 @@ class LocalServer(private val port: Int) {
                 )
                 "back" -> svc?.back()
                 "home" -> svc?.home()
+                "inputText" -> svc?.inputText(j.optString("text"))
+                "openApp" -> svc?.openApp(j.optString("package"))
             }
         }
     }
