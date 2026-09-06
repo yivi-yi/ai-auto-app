@@ -3,6 +3,7 @@ package com.example.aiauto
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.net.Uri
 import android.graphics.Path
 import android.graphics.Rect
 import android.os.Bundle
@@ -124,6 +125,18 @@ class AutoAccessibilityService : AccessibilityService() {
                 startActivity(i)
                 true
             } else false
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** 用浏览器/对应应用打开 uri（点歌、开网址、搜索页等） */
+    fun openUri(uri: String): Boolean {
+        return try {
+            val i = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(i)
+            true
         } catch (e: Exception) {
             false
         }
