@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Auto</title>
+<style>
+body{font-family:sans-serif;margin:12px;background:#202124;color:#e8eaed}
+h2{font-weight:600}
+.row{display:flex;gap:8px;margin:8px 0}
+button{flex:1;padding:12px;border:0;border-radius:8px;background:#3c4043;color:#e8eaed;font-size:16px}
+input{flex:1;padding:10px;border-radius:8px;border:1px solid #555;background:#303134;color:#e8eaed}
+label{display:block;font-size:13px;opacity:.8;margin-top:8px}
+#status{font-size:14px;color:#8ab4f8}
+img{max-width:100%;border-radius:8px;margin-top:10px;display:none}
+</style>
+</head>
+<body>
+<h2>AI Auto 控制台</h2>
+<div id="status">未连接</div>
+
+<label>点击坐标</label>
+<div class="row">
+  <input id="cx" placeholder="x">
+  <input id="cy" placeholder="y">
+  <button onclick="tap()">点击</button>
+</div>
+
+<label>滑动</label>
+<div class="row">
+  <input id="x1" placeholder="x1">
+  <input id="y1" placeholder="y1">
+  <input id="x2" placeholder="x2">
+  <input id="y2" placeholder="y2">
+</div>
+<div class="row">
+  <button onclick="swipe()">滑动</button>
+  <button onclick="act('back')">返回</button>
+  <button onclick="act('home')">主页</button>
+</div>
+
+<div class="row">
+  <button onclick="shot()">截图</button>
+  <button onclick="status()">状态</button>
+</div>
+<img id="view">
+
+<script>
+const BASE = 'http://127.0.0.1:8080';
+async function post(path, body){
+  const r = await fetch(BASE+path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  return r;
+}
+function num(id){ return parseFloat(document.getElementById(id).value); }
+async function tap(){
+  await post('/action', {type:'tap', x:num('cx'), y:num('cy')});
+  setStatus('已点击');
+}
+async function swipe(){
+  await post('/action', {type:'swipe', x1:num('x1'), y1:num('y1'), x2:num('x2'), y2:num('y2'), duration:300});
+  setStatus('已滑动');
+}
+async function act(t){
+  await post('/action', {type:t});
+  setStatus('已执行 '+t);
+}
+async function shot(){
+  await post('/capture', {});
+  await fetch('/screenshot');
+  const r = await fetch(BASE+'/screenshot');
+  const b = await r.blob();
+  const url = URL.createObjectURL(b);
+  const img = document.getElementById('view');
+  img.src = url; img.style.display='block';
+  setStatus('截图完成');
+}
+async function status(){
+  const r = await fetch(BASE+'/status');
+  const j = await r.json();
+  setStatus('服务在线 无障碍:'+(j.accessibility==='on'?'开':'关')+' 截图:'+(j.capture==='on'?'开':'关'));
+}
+function setStatus(s){ document.getElementById('status').textContent = s; }
+</script>
+</body>
+</html>
