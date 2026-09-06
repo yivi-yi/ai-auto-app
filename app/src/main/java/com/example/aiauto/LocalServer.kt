@@ -79,6 +79,13 @@ class LocalServer(private val port: Int) {
             try {
                 if (path == "/status") {
                     send(it, 200, "application/json", statusJson())
+                } else if (path == "/ui") {
+                    val arr = uiBlocking()
+                    send(it, 200, "application/json", if (arr != null) arr.toString() else Json.err("no ui"))
+                } else if (path == "/clickNode" && method == "POST") {
+                    val j = JSONObject(String(body))
+                    val ok = clickNodeBlocking(j.optString("text"))
+                    send(it, 200, "application/json", if (ok) Json.ok("clicked") else Json.err("node not found"))
                 } else if (path == "/action" && method == "POST") {
                     val j = JSONObject(String(body))
                     runAction(j)
@@ -129,6 +136,28 @@ class LocalServer(private val port: Int) {
         }
         latch.await(3, TimeUnit.SECONDS)
         return result
+    }
+
+    private fun uiBlocking(): org.json.JSONArray? {
+        val latch = CountDownLatch(1)
+        var res: org.json.JSONArray? = null
+        main.post {
+            res = AutoAccessibilityService.instance?.uiTree()
+            latch.countDown()
+        }
+        latch.await(3, TimeUnit.SECONDS)
+        return res
+    }
+
+    private fun clickNodeBlocking(text: String): Boolean {
+        val latch = CountDownLatch(1)
+        var res = false
+        main.post {
+            res = AutoAccessibilityService.instance?.clickByText(text) ?: false
+            latch.countDown()
+        }
+        latch.await(3, TimeUnit.SECONDS)
+        return res
     }
 
     private fun statusJson(): String {

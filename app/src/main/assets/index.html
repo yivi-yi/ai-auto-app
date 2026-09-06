@@ -12,12 +12,26 @@ button{flex:1;padding:12px;border:0;border-radius:8px;background:#3c4043;color:#
 input{flex:1;padding:10px;border-radius:8px;border:1px solid #555;background:#303134;color:#e8eaed}
 label{display:block;font-size:13px;opacity:.8;margin-top:8px}
 #status{font-size:14px;color:#8ab4f8}
+.node{display:block;width:100%;text-align:left;margin:4px 0;padding:10px;background:#292b2e;border-radius:6px;font-size:14px;color:#e8eaed}
+.node .tag{color:#8ab4f8;font-size:12px}
 img{max-width:100%;border-radius:8px;margin-top:10px;display:none}
 </style>
 </head>
 <body>
 <h2>AI Auto 控制台</h2>
 <div id="status">未连接</div>
+
+<div class="row">
+  <button onclick="loadUi()">读取 UI 树</button>
+  <button onclick="status()">状态</button>
+</div>
+<div id="ui"></div>
+
+<label>按文本点击节点</label>
+<div class="row">
+  <input id="ntext" placeholder="输入节点文本">
+  <button onclick="clickNode()">点击</button>
+</div>
 
 <label>点击坐标</label>
 <div class="row">
@@ -41,7 +55,6 @@ img{max-width:100%;border-radius:8px;margin-top:10px;display:none}
 
 <div class="row">
   <button onclick="shot()">截图</button>
-  <button onclick="status()">状态</button>
 </div>
 <img id="view">
 
@@ -52,6 +65,46 @@ async function post(path, body){
   return r;
 }
 function num(id){ return parseFloat(document.getElementById(id).value); }
+function setStatus(s){ document.getElementById('status').textContent = s; }
+
+async function loadUi(){
+  const r = await fetch(BASE+'/ui');
+  const j = await r.json();
+  const box = document.getElementById('ui');
+  box.innerHTML = '';
+  if (j.ok === false){ box.textContent = j.msg; setStatus('读树失败'); return; }
+  render(j, box, 0);
+  setStatus('已读取 '+countNodes(j)+' 个节点');
+}
+function render(node, box, dep){
+  const t = node.text || '';
+  const cls = (node.class||'').split('.').pop();
+  const div = document.createElement('div');
+  div.style.marginLeft = (dep*12)+'px';
+  const label = t ? t : (node.id ? node.id : cls);
+  if (node.clickable && t){
+    div.className = 'node';
+    div.textContent = label;
+    div.onclick = function(){ clickNodeText(t); };
+  } else {
+    div.innerHTML = '<span class="tag">'+(cls||'?')+'</span> '+(label||'—');
+  }
+  box.appendChild(div);
+  (node.children||[]).forEach(c => render(c, box, dep+1));
+}
+function countNodes(n){
+  if(!n) return 0;
+  return 1 + (n.children||[]).reduce((a,c)=>a+countNodes(c),0);
+}
+async function clickNode(){
+  await clickNodeText(document.getElementById('ntext').value);
+}
+async function clickNodeText(t){
+  if(!t) { setStatus('请输入文本'); return; }
+  const r = await post('/clickNode', {text:t});
+  const j = await r.json();
+  setStatus(j.ok ? '已点击「'+t+'」' : '未找到：「'+t+'」');
+}
 async function tap(){
   await post('/action', {type:'tap', x:num('cx'), y:num('cy')});
   setStatus('已点击');
@@ -66,7 +119,6 @@ async function act(t){
 }
 async function shot(){
   await post('/capture', {});
-  await fetch('/screenshot');
   const r = await fetch(BASE+'/screenshot');
   const b = await r.blob();
   const url = URL.createObjectURL(b);
@@ -79,7 +131,6 @@ async function status(){
   const j = await r.json();
   setStatus('服务在线 无障碍:'+(j.accessibility==='on'?'开':'关')+' 截图:'+(j.capture==='on'?'开':'关'));
 }
-function setStatus(s){ document.getElementById('status').textContent = s; }
 </script>
 </body>
 </html>
