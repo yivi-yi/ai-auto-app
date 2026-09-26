@@ -227,6 +227,7 @@ class LocalServer(private val port: Int) {
         put(tool("launch_app", "打开应用，app_name 为名称或包名，page 可选 search。", JSONObject().put("app_name", strProp()).put("page", strProp())))
         put(tool("list_apps", "列出已装应用（名字+包名）。", JSONObject()))
         put(tool("ui_scan", "扫描当前界面 UI 树，返回文字+坐标+是否可点击。", JSONObject()))
+        put(tool("tap_xy", "按坐标点击（x/y 像素，参照 screen_info 的宽高）。", JSONObject().put("x", numProp()).put("y", numProp())))
         put(tool("screenshot_vision", "截图并返回压缩后的图片。", JSONObject()))
         put(tool("wechat_type", "微信：点输入框→输入→发送→收起键盘。", JSONObject().put("text", strProp())))
         put(tool("wechat_search_contact", "微信：搜索联系人或群聊并打开。", JSONObject().put("contact", strProp())))
@@ -259,6 +260,15 @@ class LocalServer(private val port: Int) {
                     .put("package", svc?.currentPackage() ?: "")
                     .put("accessibility", if (AutoAccessibilityService.enabled) "on" else "off")
                     .toString()))
+            }
+            "tap_xy" -> {
+                val x = args.optDouble("x", -1.0).toFloat()
+                val y = args.optDouble("y", -1.0).toFloat()
+                if (x < 0 || y < 0) content.put(text("坐标不对"))
+                else {
+                    onMainGet { AutoAccessibilityService.instance?.tap(x, y) }
+                    content.put(text("已点击 ($x, $y)"))
+                }
             }
             "click" -> {
                 val t = args.optString("target")

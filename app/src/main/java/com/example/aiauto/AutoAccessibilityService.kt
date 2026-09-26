@@ -80,28 +80,48 @@ class AutoAccessibilityService : AccessibilityService() {
         return root.packageName?.toString() ?: ""
     }
 
-    /** 精简 UI 树：只返回文字与可交互按键 + 中心坐标 */
+    /** 精简 UI 树：文字 / 图标描述 / 输入框 / 可滚动 + 中心坐标（给 AI 找目标用） */
     fun uiTree(): JSONArray {
         val root = rootInActiveWindow ?: return JSONArray()
         val arr = JSONArray()
-        walk(root, arr)
+        walk(root, arr, 0)
         return arr
     }
 
-    private fun walk(node: AccessibilityNodeInfo, arr: JSONArray) {
-        val t = node.text?.toString()
-        if ((!t.isNullOrEmpty()) || node.isClickable) {
-            val o = JSONObject()
-            o.put("text", t ?: "")
-            o.put("click", node.isClickable)
-            val r = Rect(); node.getBoundsInScreen(r)
-            o.put("x", (r.left + r.right) / 2)
-            o.put("y", (r.top + r.bottom) / 2)
-            arr.put(o)
+    private fun walk(node: AccessibilityNodeInfo, arr: JSONArray, depth: Int) {
+        if (depth > 40 || arr.length() > 300) return
+        val t = node.text?.toString()?.trim()
+        val d = node.contentDescription?.toString()?.trim()
+        if (!t.isNullOrEmpty() || !d.isNullOrEmpty() || node.isClickable || node.isEditable) {
+            val r = Rect()
+            node.getBoundsInScreen(r)
+            if (r.width() > 0 && r.height() > 0) {
+                val o = JSONObject()
+                if (!t.isNullOrEmpty()) o.put("text", t)
+                if (!d.isNullOrEmpty()) o.put("desc", d)
+                o.put("click", node.isClickable || ancestorClickable(node, 5))
+                if (node.isEditable) o.put("input", true)
+                if (node.isScrollable) o.put("scroll", true)
+                o.put("x", (r.left + r.right) / 2)
+                o.put("y", (r.top + r.bottom) / 2)
+                arr.put(o)
+            }
         }
         for (i in 0 until node.childCount) {
-            node.getChild(i)?.let { walk(it, arr) }
+            node.getChild(i)?.let { walk(it, arr, depth + 1) }
         }
+    }
+
+    /** 文字节点自己不可点、但外层列表项可点 —— 这种情况也算"可以点这里" */
+    private fun ancestorClickable(node: AccessibilityNodeInfo, up: Int): Boolean {
+        var cur = node.parent
+        var n = 0
+        while (cur != null && n < up) {
+            if (cur.isClickable) return true
+            cur = cur.parent
+            n++
+        }
+        return false
     }
 
     /** 向当前聚焦/可编辑控件输入文字 */
