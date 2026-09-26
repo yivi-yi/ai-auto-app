@@ -1,0 +1,14 @@
+R_DEF: Internal format may change without notice
+local
+color purple_500
+color white
+drawable ic_launcher
+id btnAccess
+id btnCapture
+id btnServer
+id web
+layout activity_main
+string accessibility_desc
+string app_name
+style Theme.AIAuto
+xml accessibility_service_config

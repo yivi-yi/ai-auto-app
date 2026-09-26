@@ -56,6 +56,30 @@ class AutoAccessibilityService : AccessibilityService() {
     fun back(): Boolean = performGlobalAction(GLOBAL_ACTION_BACK)
     fun home(): Boolean = performGlobalAction(GLOBAL_ACTION_HOME)
 
+    /** 返回/主页/最近任务/下拉通知/锁屏 —— 别硬编码坐标，交给系统 */
+    fun globalAction(name: String): Boolean = when (name) {
+        "back" -> performGlobalAction(GLOBAL_ACTION_BACK)
+        "home" -> performGlobalAction(GLOBAL_ACTION_HOME)
+        "recents" -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+        "notifications" -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+        "quick_settings" -> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
+        "lock" -> if (android.os.Build.VERSION.SDK_INT >= 28) performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) else false
+        "power" -> if (android.os.Build.VERSION.SDK_INT >= 21) performGlobalAction(GLOBAL_ACTION_POWER_DIALOG) else false
+        else -> false
+    }
+
+    /** 屏幕真实尺寸：滑动/坐标都不能写死（手机和平板差太多） */
+    fun screenSize(): Pair<Int, Int> {
+        val dm = resources.displayMetrics
+        return Pair(dm.widthPixels, dm.heightPixels)
+    }
+
+    /** 当前前台包名 */
+    fun currentPackage(): String {
+        val root = rootInActiveWindow ?: return ""
+        return root.packageName?.toString() ?: ""
+    }
+
     /** 精简 UI 树：只返回文字与可交互按键 + 中心坐标 */
     fun uiTree(): JSONArray {
         val root = rootInActiveWindow ?: return JSONArray()
@@ -105,15 +129,57 @@ class AutoAccessibilityService : AccessibilityService() {
         return n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
+    /** 文字 / 描述都能找；节点本身不可点就往上找最近的可点祖先（图标按钮基本都这样） */
     private fun findClickable(node: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
         val t = node.text?.toString()
-        if (t != null && (t == text || t.contains(text)) && node.isClickable) return node
+        val d = node.contentDescription?.toString()
+        if ((t != null && (t == text || t.contains(text))) ||
+            (d != null && (d == text || d.contains(text)))
+        ) {
+            var cur: AccessibilityNodeInfo? = node
+            var hop = 0
+            while (cur != null && hop < 6) {
+                if (cur.isClickable) return cur
+                cur = cur.parent
+                hop++
+            }
+            return node
+        }
         for (i in 0 until node.childCount) {
             val c = node.getChild(i) ?: continue
             val r = findClickable(c, text)
             if (r != null) return r
         }
         return null
+    }
+
+    /** 找节点并直接点（不要求它自己可点） */
+    fun clickNode(text: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val n = findClickable(root, text) ?: return false
+        return n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
+    /** 找当前输入框（微信这类要先把输入框点开，不然拿不到焦点） */
+    fun findInput(): AccessibilityNodeInfo? {
+        val root = rootInActiveWindow ?: return null
+        return root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditable(root)
+    }
+
+    /** 输入文字并回车（找「发送」/「搜索」按钮，找不到就发 IME 回车） */
+    fun inputTextAndSend(text: String, sendLabel: String = ""): Boolean {
+        if (!inputText(text)) return false
+        main.postDelayed({
+            val labels = mutableListOf("发送", "Send", "send")
+            if (sendLabel.isNotBlank()) labels.add(0, sendLabel)
+            for (l in labels) {
+                if (clickNode(l)) return@postDelayed
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                findInput()?.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+            }
+        }, 500)
+        return true
     }
 
     /** 打开指定包名的 APP */

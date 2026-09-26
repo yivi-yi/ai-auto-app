@@ -130,10 +130,28 @@ class LocalServer(private val port: Int) {
                 )
                 "back" -> svc?.back()
                 "home" -> svc?.home()
+                "recents" -> svc?.globalAction("recents")
+                "notifications" -> svc?.globalAction("notifications")
+                "lock" -> svc?.globalAction("lock")
+                "global" -> svc?.globalAction(j.optString("key"))
                 "inputText" -> svc?.inputText(j.optString("text"))
+                "inputTextSend" -> svc?.inputTextAndSend(j.optString("text"))
+                "clickText" -> svc?.clickNode(j.optString("text"))
                 "openApp" -> svc?.openApp(j.optString("package"))
             }
         }
+    }
+
+    /** 在主线程跑一段并等结果（工具执行完直接返回，AI 不用猜） */
+    private fun <T> onMainGet(block: () -> T?): T? {
+        val latch = CountDownLatch(1)
+        var res: T? = null
+        main.post {
+            res = block()
+            latch.countDown()
+        }
+        latch.await(3, TimeUnit.SECONDS)
+        return res
     }
 
     private fun captureBlocking(): Any? {
@@ -195,16 +213,19 @@ class LocalServer(private val port: Int) {
         put("protocolVersion", "2025-03-26")
         put("capabilities", JSONObject().put("tools", JSONObject().put("listChanged", false)))
         put("serverInfo", JSONObject().put("name", "ai-auto").put("version", "1.0"))
-        put("instructions", "控制平板：click/long_press/swipe/type_text/go_back/launch_app/ui_scan/screenshot_vision/wechat_*/play_song/open_url。click 的 target 可给坐标 (100,200) 或界面文字。")
+        put("instructions", "控制平板：screen_info 看屏幕尺寸/当前应用；ui_scan 读界面文字和坐标；click 可按文字或坐标点；type_text 输入；press 用 back/home/recents/notifications；launch_app 开应用（名字或包名都行，不确定先 list_apps）；screenshot_vision 截图看画面；swipe_screen 滑动（up/down/left/right 或坐标）。")
     }
 
     private fun mcpTools(): JSONArray = JSONArray().apply {
-        put(tool("click", "点击目标，target 为坐标如 (100,200) 或界面文字。", JSONObject().put("target", strProp()).put("feedback", strProp())))
+        put(tool("screen_info", "屏幕尺寸 + 当前前台应用包名（算坐标前先看一眼）。", JSONObject()))
+        put(tool("click", "点击目标，target 为坐标如 (100,200) 或界面文字（含图标描述，如「搜索」）。", JSONObject().put("target", strProp()).put("feedback", strProp())))
         put(tool("long_press_target", "长按目标，duration 毫秒。", JSONObject().put("target", strProp()).put("duration", numProp())))
         put(tool("swipe_screen", "滑动屏幕，start 为方向 up/down/left/right 或坐标，end 为终点坐标。", JSONObject().put("start", strProp()).put("end", strProp()).put("duration", numProp())))
-        put(tool("type_text", "向当前输入框输入文字并回车。", JSONObject().put("text", strProp())))
-        put(tool("go_back", "返回键。", JSONObject()))
+        put(tool("type_text", "往当前输入框打字；enter=true 会顺手点「发送」/回车。", JSONObject().put("text", strProp()).put("enter", boolProp())))
+        put(tool("press", "系统按键：back / home / recents / notifications / quick_settings / lock / power。", JSONObject().put("key", strProp())))
+        put(tool("go_back", "返回键（同 press key=back）。", JSONObject()))
         put(tool("launch_app", "打开应用，app_name 为名称或包名，page 可选 search。", JSONObject().put("app_name", strProp()).put("page", strProp())))
+        put(tool("list_apps", "列出已装应用（名字+包名）。", JSONObject()))
         put(tool("ui_scan", "扫描当前界面 UI 树，返回文字+坐标+是否可点击。", JSONObject()))
         put(tool("screenshot_vision", "截图并返回压缩后的图片。", JSONObject()))
         put(tool("wechat_type", "微信：点输入框→输入→发送→收起键盘。", JSONObject().put("text", strProp())))
@@ -217,23 +238,54 @@ class LocalServer(private val port: Int) {
     private fun tool(name: String, desc: String, props: JSONObject): JSONObject {
         val schema = JSONObject().put("type", "object").put("properties", props)
         val required = JSONArray()
-        for (k in props.keys()) { if (k != "feedback" && k != "duration" && k != "end" && k != "page") required.put(k) }
+        for (k in props.keys()) { if (k != "feedback" && k != "duration" && k != "end" && k != "page" && k != "enter") required.put(k) }
         if (required.length() > 0) schema.put("required", required)
         return JSONObject().put("name", name).put("description", desc).put("inputSchema", schema)
     }
 
     private fun numProp() = JSONObject().put("type", "number")
     private fun strProp() = JSONObject().put("type", "string")
+    private fun boolProp() = JSONObject().put("type", "boolean")
 
     private fun mcpCall(name: String, args: JSONObject): JSONObject {
         val content = JSONArray()
         when (name) {
+            "screen_info" -> {
+                val svc = AutoAccessibilityService.instance
+                val size = svc?.screenSize() ?: Pair(0, 0)
+                content.put(text(JSONObject()
+                    .put("width", size.first)
+                    .put("height", size.second)
+                    .put("package", svc?.currentPackage() ?: "")
+                    .put("accessibility", if (AutoAccessibilityService.enabled) "on" else "off")
+                    .toString()))
+            }
             "click" -> {
                 val t = args.optString("target")
-                val c = resolveCoord(t)
-                if (c == null) content.put(text("找不到: $t"))
-                else { runOnMain { AutoAccessibilityService.instance?.tap(c.first.toFloat(), c.second.toFloat()) }; content.put(text("已点击")) }
+                val c = parseCoordOrNull(t)
+                if (c != null) {
+                    onMainGet { AutoAccessibilityService.instance?.tap(c.first.toFloat(), c.second.toFloat()) }
+                    content.put(text("已点击 (${c.first},${c.second})"))
+                } else {
+                    val ok = onMainGet { AutoAccessibilityService.instance?.clickNode(t) }
+                    if (ok == true) {
+                        content.put(text("已点击「$t」"))
+                    } else {
+                        val cc = resolveCoord(t)
+                        if (cc == null) content.put(text("找不到: $t"))
+                        else {
+                            onMainGet { AutoAccessibilityService.instance?.tap(cc.first.toFloat(), cc.second.toFloat()) }
+                            content.put(text("已点击「$t」(${cc.first},${cc.second})"))
+                        }
+                    }
+                }
             }
+            "press" -> {
+                val key = args.optString("key", "back")
+                val ok = onMainGet { AutoAccessibilityService.instance?.globalAction(key) }
+                content.put(text(if (ok == true) "已执行 $key" else "执行失败: $key"))
+            }
+            "list_apps" -> content.put(text(listApps()))
             "long_press_target" -> {
                 val t = args.optString("target"); val c = resolveCoord(t); val d = args.optLong("duration", 1000)
                 if (c == null) content.put(text("找不到: $t"))
@@ -248,8 +300,16 @@ class LocalServer(private val port: Int) {
                     else { runOnMain { AutoAccessibilityService.instance?.swipe(c1.first.toFloat(), c1.second.toFloat(), c2.first.toFloat(), c2.second.toFloat(), d) }; content.put(text("已滑动")) }
                 }
             }
-            "type_text" -> { runOnMain { AutoAccessibilityService.instance?.inputText(args.optString("text")) }; content.put(text("已执行")) }
-            "go_back" -> { runOnMain { AutoAccessibilityService.instance?.back() }; content.put(text("已返回")) }
+            "type_text" -> {
+                val t = args.optString("text")
+                val enter = args.optBoolean("enter", false)
+                val ok = onMainGet {
+                    if (enter) AutoAccessibilityService.instance?.inputTextAndSend(t)
+                    else AutoAccessibilityService.instance?.inputText(t)
+                }
+                content.put(text(if (ok == true) (if (enter) "已输入并发送" else "已输入") else "没找到输入框"))
+            }
+            "go_back" -> { onMainGet { AutoAccessibilityService.instance?.back() }; content.put(text("已返回")) }
             "launch_app" -> {
                 val app = args.optString("app_name"); val page = args.optString("page")
                 val pkg = packageOf(app)
@@ -295,7 +355,11 @@ class LocalServer(private val port: Int) {
 
     private fun directionSwipe(dir: String) {
         val svc = AutoAccessibilityService.instance ?: return
-        val cx = 920; val cy = 1400; val off = 700
+        // 中心按真实屏幕算（以前写死 920/1400，是手机的尺寸，平板就滑歪了）
+        val (w, h) = svc.screenSize()
+        val cx = w / 2
+        val cy = h / 2
+        val off = (h * 0.25f).toInt().coerceAtLeast(120)
         when (dir) {
             "up" -> svc.swipe(cx.toFloat(), (cy + off).toFloat(), cx.toFloat(), (cy - off).toFloat(), 300)
             "down" -> svc.swipe(cx.toFloat(), (cy - off).toFloat(), cx.toFloat(), (cy + off).toFloat(), 300)
@@ -304,10 +368,59 @@ class LocalServer(private val port: Int) {
         }
     }
 
+    /** 应用名 / 包名 → 包名：优先问系统（装了什么就认什么），别名只兜底 */
     private fun packageOf(app: String): String {
-        val known = mapOf("微信" to "com.tencent.mm", "抖音" to "com.ss.android.ugc.aweme", "网易云" to "com.netease.cloudmusic", "应用商店" to "com.bbk.appstore")
-        if (known.containsKey(app)) return known[app]!!
-        return app
+        val a = app.trim()
+        if (a.isEmpty()) return a
+        try {
+            val ctx = appContext() ?: return a
+            val pm = ctx.packageManager
+            // 直接是包名
+            try {
+                pm.getPackageInfo(a, 0)
+                return a
+            } catch (_: Exception) {
+            }
+            val target = a.removeSuffix("app").removeSuffix("APP").lowercase()
+            for (p in pm.getInstalledPackages(0)) {
+                val pkg = p.packageName
+                val ai = p.applicationInfo ?: continue
+                val label = pm.getApplicationLabel(ai).toString()
+                if (label == a || label.lowercase() == a.lowercase() ||
+                    label.lowercase().contains(target) && target.length >= 2
+                ) {
+                    return pkg
+                }
+            }
+        } catch (_: Exception) {
+        }
+        val known = mapOf(
+            "微信" to "com.tencent.mm",
+            "抖音" to "com.ss.android.ugc.aweme",
+            "网易云" to "com.netease.cloudmusic",
+            "b站" to "tv.danmaku.bili",
+            "哔哩哔哩" to "tv.danmaku.bili",
+            "浏览器" to "com.android.browser"
+        )
+        return known[a] ?: a
+    }
+
+    /** 列出已装应用（名字+包名），AI 不知道包名时可以先问一次 */
+    private fun listApps(): String {
+        return try {
+            val pm = appContext()?.packageManager ?: return "[]"
+            val arr = JSONArray()
+            for (p in pm.getInstalledPackages(0)) {
+                if (pm.getLaunchIntentForPackage(p.packageName) == null) continue
+                val ai = p.applicationInfo ?: continue
+                arr.put(JSONObject()
+                    .put("label", pm.getApplicationLabel(ai).toString())
+                    .put("package", p.packageName))
+            }
+            arr.toString()
+        } catch (e: Exception) {
+            "[]"
+        }
     }
 
     private fun searchUriOf(pkg: String): String {
@@ -337,34 +450,68 @@ class LocalServer(private val port: Int) {
         }
     }
 
+    /** 微信发消息：不再写死坐标 —— 点输入框（按可编辑节点找）→ 输入 → 点「发送」 */
     private fun wechatType(text: String) {
         main.post {
-            AutoAccessibilityService.instance?.tap(900f, 2750f)
-            main.postDelayed({ AutoAccessibilityService.instance?.inputText(text) }, 600)
-            main.postDelayed({ AutoAccessibilityService.instance?.back() }, 1500)
+            val svc = AutoAccessibilityService.instance ?: return@post
+            val input = svc.findInput()
+            if (input != null) {
+                // 有些输入框要先点一下才拿得到焦点
+                val r = android.graphics.Rect(); input.getBoundsInScreen(r)
+                svc.tap(((r.left + r.right) / 2).toFloat(), ((r.top + r.bottom) / 2).toFloat())
+                main.postDelayed({ svc.inputTextAndSend(text) }, 500)
+            } else {
+                svc.inputTextAndSend(text)
+            }
         }
     }
 
+    /** 微信找联系人/群：点搜索（图标或「搜索」文字都认）→ 输入 → 点第一条结果 */
     private fun wechatSearch(contact: String) {
         main.post {
-            AutoAccessibilityService.instance?.tap(1640f, 150f)
-            main.postDelayed({ AutoAccessibilityService.instance?.inputText(contact) }, 600)
-            main.postDelayed({ AutoAccessibilityService.instance?.tap(1000f, 500f) }, 1400)
+            val svc = AutoAccessibilityService.instance ?: return@post
+            svc.clickNode("搜索") || svc.clickNode("Search")
+            main.postDelayed({ svc.inputText(contact) }, 700)
+            main.postDelayed({
+                // 结果第一条通常在列表最上面：按文字先找，找不到就点屏幕上方第一条可点的
+                if (!svc.clickNode(contact)) {
+                    val nodes = svc.uiTree()
+                    var best: Pair<Int, Int>? = null
+                    for (i in 0 until nodes.length()) {
+                        val o = nodes.getJSONObject(i)
+                        if (!o.optBoolean("click")) continue
+                        val y = o.optInt("y")
+                        if (y < 200) continue
+                        if (best == null || y < best!!.second) best = Pair(o.optInt("x"), y)
+                    }
+                    best?.let { svc.tap(it.first.toFloat(), it.second.toFloat()) }
+                }
+            }, 1500)
         }
     }
 
+    /** 微信朋友圈：底部「发现」→「朋友圈」，都按文字点 */
     private fun wechatMoments() {
         main.post {
-            AutoAccessibilityService.instance?.tap(1150f, 2700f)
-            main.postDelayed({ AutoAccessibilityService.instance?.tap(1000f, 280f) }, 600)
+            val svc = AutoAccessibilityService.instance ?: return@post
+            svc.clickNode("发现")
+            main.postDelayed({ svc.clickNode("朋友圈") }, 800)
         }
     }
+
+    private fun appContext(): android.content.Context? =
+        App.ctx ?: AutoAccessibilityService.instance?.applicationContext
+            ?: CaptureService.instance?.applicationContext
 
     private fun statusJson(): String {
         val o = JSONObject()
         o.put("accessibility", if (AutoAccessibilityService.enabled) "on" else "off")
         o.put("capture", if (CaptureService.active) "on" else "off")
         o.put("port", port)
+        val size = AutoAccessibilityService.instance?.screenSize()
+        o.put("width", size?.first ?: 0)
+        o.put("height", size?.second ?: 0)
+        o.put("package", AutoAccessibilityService.instance?.currentPackage() ?: "")
         return o.toString()
     }
 

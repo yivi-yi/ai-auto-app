@@ -1,34 +1,59 @@
 # AI Auto
 
-一个安卓自动化 APP：前端 WebView 控制台 + 本地 HTTP 后端，通过系统无障碍服务执行点击、滑动、返回，通过 MediaProjection 实现截图。可给 AI 当"手"用。
+一个安卓自动化 APP：**给 AI 当"手和眼"**。无障碍服务负责点击/滑动/输入/读屏，MediaProjection 负责截图，
+APP 里跑一个本地 HTTP 服务（默认 8080），既能当 REST 接口用，也能当 **MCP 服务器**直接挂给 AI 客户端。
 
-## 能力
-- `tap` 点击坐标
-- `swipe` 滑动
-- `back` / `home` 返回、主页
-- `capture` 截图
-- `GET /status` 查看状态
+装一次、开两个开关（无障碍 + 截图），之后 AI 就能开应用、按文字点按钮、滑列表、打字、看截图。
 
-## 本地 API（手机内 127.0.0.1:8080）
-- `POST /action` body: `{"type":"tap","x":100,"y":200}` 或 `{"type":"swipe","x1":..,"y1":..,"x2":..,"y2":..,"duration":300}` 或 `{"type":"back"}`、`{"type":"home"}`
-- `POST /capture` 触发截图
-- `GET /screenshot` 获取最新截图 PNG
-- `GET /status` 返回 JSON 状态
+## 能力（MCP 工具）
 
-## 使用
-1. Android Studio 打开，构建安装。
-2. 点「开启无障碍」在系统设置里打开本服务的开关。
-3. 点「开启截图」授权屏幕录制。
-4. 在 APP 内控制台操作，或让 AI 直接调用上面的本地接口。
+| 工具 | 说明 |
+| --- | --- |
+| `screen_info` | 屏幕尺寸 + 当前前台应用包名（算坐标前先看一眼） |
+| `ui_scan` | 读当前界面：文字/图标描述 + 中心坐标 + 是否可点 |
+| `click` | 点目标：给坐标 `(100,200)` 或给界面文字（图标描述也认，如「搜索」） |
+| `long_press_target` | 长按某个文字/坐标 |
+| `swipe_screen` | 滑动：`up/down/left/right` 或起止坐标 |
+| `type_text` | 往输入框打字；`enter=true` 顺手点「发送」/回车 |
+| `press` | 系统键：`back/home/recents/notifications/quick_settings/lock/power` |
+| `launch_app` | 开应用（名字或包名都行，会问系统认） |
+| `list_apps` | 列出已装应用（名字+包名） |
+| `screenshot_vision` | 截图（压缩 JPEG，base64） |
+| `open_url` | 打开网址 |
+| `wechat_type` / `wechat_search_contact` / `wechat_moments` | 微信：发消息 / 找联系人 / 进朋友圈 |
+| `play_song` | 搜网易云的歌（要用 `orpheus://` 打开） |
 
-## AI 接入示例
-```python
-import requests
-ip = "192.168.x.x"   # 手机局域网 IP（需在同一 Wi-Fi）
-requests.post(f"http://{ip}:8080/action", json={"type":"tap","x":100,"y":200})
-```
+> 所有定位都走"读屏 + 文字/描述"，**不写死坐标** —— 手机和平板分辨率不一样也能用。
+
+## 本地接口
+
+- `GET /status` → `{"accessibility":"on","capture":"on","port":8080,"width":..,"height":..,"package":".."}`
+- `GET /ui` → UI 树（文字/坐标/可点）
+- `POST /action` → `{"type":"tap","x":100,"y":200}`、`{"type":"swipe",...}`、`{"type":"back"}`、
+  `{"type":"home"}`、`{"type":"recents"}`、`{"type":"notifications"}`、`{"type":"clickText","text":"发送"}`、
+  `{"type":"inputTextSend","text":"你好"}`、`{"type":"openApp","package":"com.tencent.mm"}`
+- `POST /clickNode` → `{"text":"发送"}` 按文字点
+- `POST /capture` + `GET /screenshot` → 截图（PNG/JPEG 字节）
+- `POST /mcp` → JSON-RPC 2.0（`initialize` / `tools/list` / `tools/call`）
+
+局域网里：`http://<平板IP>:8080/...`；平板本机：`http://127.0.0.1:8080/...`
+
+## 用法
+
+1. 装机，打开 APP。
+2. 「开启无障碍」→ 在系统设置里打开 **AI Auto** 的无障碍开关（不点开这个，一切都不工作）。
+3. 「开启截图」→ 允许录屏（截图工具要用）。
+4. 「启动服务」→ 常驻前台服务，端口 8080。
+5. AI 那边把 `http://<平板IP>:8080/mcp` 当 MCP 服务器挂上（或在电脑上用 `ai-auto-mcp` 那套转发）。
 
 ## 权限说明
-- 无障碍服务：执行手势与全局返回。
+
+- 无障碍：手势、全局按键、读屏、输入文字。
 - 媒体投影：截图。
-- 服务器监听 `ServerSocket(8080)`，默认绑定所有网卡，局域网可直接访问手机 `IP:8080`；需与手机处于同一 Wi-Fi。
+- 前台服务：让本地服务常驻（有常驻通知）。
+- 服务监听 `0.0.0.0:8080`，同意局域网里的设备访问 —— 所以别在不可信的 Wi-Fi 下开着。
+
+## 自己编
+
+- **GitHub Actions**：推 main 自动出包（`.github/workflows/build.yml`，产物在 Actions 的 artifact 里）。
+- **本地（Linux/沙箱）**：`bash tools/build-apk.sh`（产物 `apk-out/app-debug.apk`，`--push` 会推到 `apk` 分支）。

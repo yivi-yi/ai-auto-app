@@ -1,0 +1,115 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:2:1-50:12
+INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:2:1-50:12
+INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:2:1-50:12
+INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:2:1-50:12
+	package
+		INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml
+	android:versionName
+		INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml
+	android:versionCode
+		INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:2:11-69
+uses-permission#android.permission.INTERNET
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:4:5-67
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:4:22-64
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:5:5-77
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:5:22-74
+uses-permission#android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:6:5-94
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:6:22-91
+uses-permission#android.permission.POST_NOTIFICATIONS
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:7:5-77
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:7:22-74
+uses-permission#android.permission.SYSTEM_ALERT_WINDOW
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:8:5-78
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:8:22-75
+uses-permission#android.permission.FOREGROUND_SERVICE_DATA_SYNC
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:9:5-87
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:9:22-84
+application
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:11:5-49:19
+INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:11:5-49:19
+	android:extractNativeLibs
+		INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml
+	android:supportsRtl
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:16:9-35
+	android:label
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:15:9-41
+	android:icon
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:14:9-45
+	android:allowBackup
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:13:9-35
+	android:theme
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:17:9-44
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:12:9-28
+activity#com.example.aiauto.MainActivity
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:19:9-26:20
+	android:exported
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:21:13-36
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:20:13-41
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:22:13-25:29
+action#android.intent.action.MAIN
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:23:17-69
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:23:25-66
+category#android.intent.category.LAUNCHER
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:24:17-77
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:24:27-74
+service#com.example.aiauto.AutoAccessibilityService
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:28:9-38:19
+	android:exported
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:30:13-36
+	android:permission
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:31:13-79
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:29:13-53
+intent-filter#action:name:android.accessibilityservice.AccessibilityService
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:32:13-34:29
+action#android.accessibilityservice.AccessibilityService
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:33:17-92
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:33:25-89
+meta-data#android.accessibilityservice
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:35:13-37:72
+	android:resource
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:37:17-69
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:36:17-60
+service#com.example.aiauto.CaptureService
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:40:9-43:63
+	android:exported
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:42:13-37
+	android:foregroundServiceType
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:43:13-60
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:41:13-43
+service#com.example.aiauto.ServerService
+ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:45:9-48:56
+	android:exported
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:47:13-37
+	android:foregroundServiceType
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:48:13-53
+	android:name
+		ADDED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml:46:13-42
+uses-sdk
+INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml
+INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /workspace/ai-auto-app/app/src/main/AndroidManifest.xml

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.AIAuto" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/purple_500</item>
-        <item name="colorOnPrimary">@color/white</item>
+    <style name="Theme.AIAuto" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:colorAccent">#8AB4F8</item>
     </style>
 </resources>

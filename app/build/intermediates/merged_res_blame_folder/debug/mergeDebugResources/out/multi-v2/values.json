@@ -1,0 +1,55 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.example.aiauto.app-mergeDebugResources-2:/values/values.xml",
+            "map": [
+                {
+                    "source": "/workspace/ai-auto-app/app/src/main/res/values/strings.xml",
+                    "from": {
+                        "startLines": "3,2",
+                        "startColumns": "4,4",
+                        "startOffsets": "100,55",
+                        "endColumns": "78,44",
+                        "endOffsets": "174,95"
+                    },
+                    "to": {
+                        "startLines": "4,5",
+                        "startColumns": "4,4",
+                        "startOffsets": "140,219",
+                        "endColumns": "78,44",
+                        "endOffsets": "214,259"
+                    }
+                },
+                {
+                    "source": "/workspace/ai-auto-app/app/src/main/res/values/colors.xml",
+                    "from": {
+                        "startLines": "2,3",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,100",
+                        "endColumns": "44,39",
+                        "endOffsets": "95,135"
+                    }
+                },
+                {
+                    "source": "/workspace/ai-auto-app/app/src/main/res/values/themes.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "4",
+                        "endColumns": "12",
+                        "endOffsets": "207"
+                    },
+                    "to": {
+                        "startLines": "6",
+                        "startColumns": "4",
+                        "startOffsets": "264",
+                        "endLines": "8",
+                        "endColumns": "12",
+                        "endOffsets": "416"
+                    }
+                }
+            ]
+        }
+    ]
+}

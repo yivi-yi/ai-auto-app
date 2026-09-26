@@ -52,7 +52,7 @@ class CaptureService : Service() {
 
     private fun startProjection(resultCode: Int, data: Intent) {
         val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        val proj = mpm.getMediaProjection(resultCode, data)
+        val proj = mpm.getMediaProjection(resultCode, data) ?: return
         if (Build.VERSION.SDK_INT >= 34) {
             proj.registerCallback(object : MediaProjection.Callback() {}, main)
         }
