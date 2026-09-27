@@ -11,17 +11,27 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
-class LocalServer(private val port: Int) {
+class LocalServer(
+    private val port: Int,
+    private val readToken: () -> String = { "" },
+    private val writeToken: (String) -> Unit = {}
+) {
 
     private var server: ServerSocket? = null
     private var running = false
     private val main = Handler(Looper.getMainLooper())
+
+    /** 启动失败的原因（端口被占用之类），给 /status 和通知用 */
+    @Volatile
+    var startError: String? = null
+        private set
 
     fun start() {
         running = true
         thread {
             try {
                 server = ServerSocket(port)
+                startError = null
                 while (running) {
                     try {
                         val socket = server!!.accept()
@@ -31,7 +41,9 @@ class LocalServer(private val port: Int) {
                     }
                 }
             } catch (e: IOException) {
-                // 端口被占用或启动失败
+                // 端口被占用或启动失败 —— 记下来，别静默
+                startError = e.message ?: "端口 $port 被占用"
+                running = false
             }
         }
     }
@@ -60,7 +72,9 @@ class LocalServer(private val port: Int) {
             val parts = lines[0].split(" ")
             if (parts.size < 2) return
             val method = parts[0]
-            val path = parts[1]
+            val rawPath = parts[1]
+            val path = rawPath.substringBefore("?")
+            val query = rawPath.substringAfter("?", "")
             val headers = lines.drop(1).filter { it.contains(":") }
             val len = headers.firstOrNull { it.startsWith("Content-Length", true) }
                 ?.substringAfter(":")?.trim()?.toIntOrNull() ?: 0
@@ -77,21 +91,50 @@ class LocalServer(private val port: Int) {
                 ByteArray(0)
             }
 
+            // 局域网来的请求要带 token（本机回环不用）；token 没设就不校验
+            val isLocal = socket.inetAddress?.isLoopbackAddress == true
+            val token = readToken()
+            if (!isLocal && token.isNotEmpty()) {
+                val fromHeader = headers.firstOrNull { it.startsWith("X-Token", true) }
+                    ?.substringAfter(":")?.trim()
+                val fromQuery =
+                    if (query.contains("token=")) query.substringAfter("token=").substringBefore("&") else null
+                if (fromHeader != token && fromQuery != token) {
+                    send(socket, 401, "application/json", Json.err("token 不对"))
+                    return
+                }
+            }
+
             try {
-                if (path == "/status") {
+                if (path == "/set_token" && method == "POST") {
+                    if (!isLocal) {
+                        send(it, 403, "application/json", Json.err("只能在本机设置"))
+                    } else {
+                        val t = JSONObject(String(body)).optString("token").trim()
+                        writeToken(t)
+                        send(it, 200, "application/json", JSONObject().put("ok", true).put("token", t).toString())
+                    }
+                } else if (path == "/status") {
                     send(it, 200, "application/json", statusJson())
                 } else if (path == "/ui") {
+                    if (noA11y(it)) return
                     val arr = uiBlocking()
                     send(it, 200, "application/json", arr?.toString() ?: "[]")
                 } else if (path == "/clickNode" && method == "POST") {
+                    if (noA11y(it)) return
                     val j = JSONObject(String(body))
                     val ok = clickNodeBlocking(j.optString("text"))
                     send(it, 200, "application/json", if (ok) Json.ok("clicked") else Json.err("node not found"))
                 } else if (path == "/action" && method == "POST") {
+                    if (noA11y(it)) return
                     val j = JSONObject(String(body))
                     runAction(j)
                     send(it, 200, "application/json", Json.ok("ok"))
                 } else if (path == "/capture" && method == "POST") {
+                    if (CaptureService.lastShot == null && AutoAccessibilityService.instance == null && CaptureService.instance == null) {
+                        send(it, 200, "application/json", Json.err("截图没开：无障碍或录屏授权任意一个"))
+                        return
+                    }
                     val f = captureBlocking()
                     if (f != null) send(it, 200, "application/json", Json.ok("shot"))
                     else send(it, 500, "application/json", Json.err("no capture"))
@@ -115,6 +158,13 @@ class LocalServer(private val port: Int) {
                 send(it, 500, "application/json", Json.err(e.message ?: "error"))
             }
         }
+    }
+
+    /** 无障碍没开时点击/滑动全是空转 —— 直接说清楚，别让 AI 以为点成了 */
+    private fun noA11y(socket: Socket): Boolean {
+        if (AutoAccessibilityService.instance != null) return false
+        send(socket, 200, "application/json", Json.err("无障碍没开：先在平板上打开 AI Auto 的无障碍开关"))
+        return true
     }
 
     private fun runAction(j: JSONObject) {
@@ -229,7 +279,7 @@ class LocalServer(private val port: Int) {
 
     private fun mcpTools(): JSONArray = JSONArray().apply {
         put(tool("screen_info", "屏幕尺寸 + 当前前台应用包名（算坐标前先看一眼）。", JSONObject()))
-        put(tool("click", "点击目标，target 为坐标如 (100,200) 或界面文字（含图标描述，如「搜索」）。", JSONObject().put("target", strProp()).put("feedback", strProp())))
+        put(tool("click", "点击目标，target 为坐标如 (100,200) 或界面文字（含图标描述，如「搜索」）。", JSONObject().put("target", strProp())))
         put(tool("long_press_target", "长按目标，duration 毫秒。", JSONObject().put("target", strProp()).put("duration", numProp())))
         put(tool("swipe_screen", "滑动屏幕，start 为方向 up/down/left/right 或坐标，end 为终点坐标。", JSONObject().put("start", strProp()).put("end", strProp()).put("duration", numProp())))
         put(tool("type_text", "往当前输入框打字；enter=true 会顺手点「发送」/回车。", JSONObject().put("text", strProp()).put("enter", boolProp())))
@@ -250,7 +300,7 @@ class LocalServer(private val port: Int) {
     private fun tool(name: String, desc: String, props: JSONObject): JSONObject {
         val schema = JSONObject().put("type", "object").put("properties", props)
         val required = JSONArray()
-        for (k in props.keys()) { if (k != "feedback" && k != "duration" && k != "end" && k != "page" && k != "enter") required.put(k) }
+        for (k in props.keys()) { if (k != "duration" && k != "end" && k != "page" && k != "enter") required.put(k) }
         if (required.length() > 0) schema.put("required", required)
         return JSONObject().put("name", name).put("description", desc).put("inputSchema", schema)
     }
@@ -260,6 +310,11 @@ class LocalServer(private val port: Int) {
     private fun boolProp() = JSONObject().put("type", "boolean")
 
     private fun mcpCall(name: String, args: JSONObject): JSONObject {
+        if (AutoAccessibilityService.instance == null) {
+            return JSONObject()
+                .put("content", JSONArray().put(text("无障碍没开：先在平板上打开 AI Auto 的无障碍开关，再让我操作")))
+                .put("isError", true)
+        }
         val content = JSONArray()
         when (name) {
             "screen_info" -> {
@@ -334,9 +389,14 @@ class LocalServer(private val port: Int) {
             "launch_app" -> {
                 val app = args.optString("app_name"); val page = args.optString("page")
                 val pkg = packageOf(app)
-                if (page == "search") { val uri = searchUriOf(pkg); runOnMain { AutoAccessibilityService.instance?.openUri(uri) } }
-                else { runOnMain { AutoAccessibilityService.instance?.openApp(pkg) } }
-                content.put(text("已打开 $app"))
+                if (page == "search") {
+                    val uri = searchUriOf(pkg)
+                    val ok = onMainGet { AutoAccessibilityService.instance?.openUri(uri) }
+                    content.put(text(if (ok == true) "已打开 $app 的搜索页" else "打不开 $app 的搜索页"))
+                } else {
+                    val ok = onMainGet { AutoAccessibilityService.instance?.openApp(pkg) }
+                    content.put(text(if (ok == true) "已打开 $app" else "没找到应用：$app（解析成包名 $pkg，先 list_apps 看看）"))
+                }
             }
             "ui_scan" -> content.put(text(uiBlocking()?.toString() ?: "[]"))
             "screenshot_vision" -> {
@@ -526,9 +586,14 @@ class LocalServer(private val port: Int) {
 
     private fun statusJson(): String {
         val o = JSONObject()
-        o.put("accessibility", if (AutoAccessibilityService.enabled) "on" else "off")
+        val a11y = AutoAccessibilityService.instance != null
+        o.put("accessibility", if (a11y) "on" else "off")
         o.put("capture", if (CaptureService.active) "on" else "off")
+        // 截图有两条路：无障碍自带（不用授权录屏）优先，其次录屏授权
+        o.put("screenshot", if (a11y) "accessibility" else if (CaptureService.active) "projection" else "none")
         o.put("port", port)
+        o.put("token_required", readToken().isNotEmpty())
+        startError?.let { o.put("error", it) }
         val size = AutoAccessibilityService.instance?.screenSize()
         o.put("width", size?.first ?: 0)
         o.put("height", size?.second ?: 0)

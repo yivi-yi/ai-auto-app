@@ -131,13 +131,22 @@ class AutoAccessibilityService : AccessibilityService() {
         return false
     }
 
-    /** 向当前聚焦/可编辑控件输入文字 */
+    /** 向当前聚焦/可编辑控件输入文字；SET_TEXT 不认的应用（微信/淘宝这类自绘输入框）退回剪贴板粘贴 */
     fun inputText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val n = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditable(root) ?: return false
+        n.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
         val args = Bundle()
         args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
-        return n.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        if (n.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return true
+        return try {
+            val cm = getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("ai-auto", text))
+            n.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            n.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun findEditable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
