@@ -155,6 +155,17 @@ class LocalServer(private val port: Int) {
     }
 
     private fun captureBlocking(): Any? {
+        // ① 先试无障碍自带截图：**不用**授权录屏（API 30+ 且 config 里 canTakeScreenshot=true）
+        //    注意在 HTTP 线程调（回调回主线程，主线程里等会死锁）
+        try {
+            val shot = AutoAccessibilityService.instance?.screenshotSync(3000)
+            if (shot != null) {
+                CaptureService.lastShot = shot
+                return shot
+            }
+        } catch (e: Exception) {
+        }
+        // ② 退回 MediaProjection（开了「开启截图」授权的那条路）
         val latch = CountDownLatch(1)
         var result: Any? = null
         main.post {

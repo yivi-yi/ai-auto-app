@@ -17,11 +17,14 @@ import org.json.JSONObject
 class AutoAccessibilityService : AccessibilityService() {
 
     companion object {
+        @Volatile
         var instance: AutoAccessibilityService? = null
+        @Volatile
         var enabled = false
     }
 
     private val main = Handler(Looper.getMainLooper())
+    private val shotExec = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     override fun onServiceConnected() {
         instance = this
@@ -32,8 +35,12 @@ class AutoAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
-        if (instance == this) instance = null
+        if (instance === this) instance = null
         enabled = false
+        try {
+            shotExec.shutdown()
+        } catch (e: Exception) {
+        }
         super.onDestroy()
     }
 
@@ -200,6 +207,55 @@ class AutoAccessibilityService : AccessibilityService() {
             }
         }, 500)
         return true
+    }
+
+    /** 无障碍自带的截图（API 30+，配置里 canTakeScreenshot=true）——
+     *  好处：**不用**授权录屏。压缩规格跟录屏那条路一致。
+     *  ⚠️ 必须在**非主线程**调用：回调是回到 main 的，主线程里等就是自己等自己。 */
+    fun screenshotSync(timeoutMs: Long = 3000): java.io.File? {
+        if (android.os.Build.VERSION.SDK_INT < 30) return null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var out: java.io.File? = null
+        try {
+            takeScreenshot(android.view.Display.DEFAULT_DISPLAY, shotExec,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(result: ScreenshotResult) {
+                        try {
+                            val hb = result.hardwareBuffer
+                            val bmp = android.graphics.Bitmap.wrapHardwareBuffer(hb, result.colorSpace)
+                            val sw = bmp?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                            hb.close()
+                            if (sw != null) out = saveJpeg(sw)
+                            if (sw != null && sw !== bmp) sw.recycle()
+                            bmp?.recycle()
+                        } catch (e: Exception) {
+                            out = null
+                        } finally {
+                            latch.countDown()
+                        }
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        latch.countDown()
+                    }
+                })
+        } catch (e: Exception) {
+            latch.countDown()
+        }
+        latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        return out
+    }
+
+    private fun saveJpeg(src: android.graphics.Bitmap): java.io.File? {
+        val maxW = 720
+        val scale = if (src.width > maxW) maxW.toFloat() / src.width else 1f
+        val w = (src.width * scale).toInt().coerceAtLeast(1)
+        val h = (src.height * scale).toInt().coerceAtLeast(1)
+        val scaled = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(src, w, h, true) else src
+        val f = java.io.File(filesDir, "shot_${System.currentTimeMillis()}.jpg")
+        f.outputStream().use { scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, it) }
+        if (scaled !== src) scaled.recycle()
+        return f
     }
 
     /** 打开指定包名的 APP */
