@@ -9,22 +9,25 @@ APP 里跑一个本地 HTTP 服务（默认 8080），既能当 REST 接口用�
 
 | 工具 | 说明 |
 | --- | --- |
-| `screen_info` | 屏幕尺寸 + 当前前台应用包名（算坐标前先看一眼） |
-| `ui_scan` | 读当前界面：文字/图标描述 + 中心坐标 + 是否可点（外层列表项可点也算） |
+| `screen_size` | 屏幕宽高（像素），算坐标前先看一眼 |
+| `current_app` | 当前前台应用的包名和名字 |
+| `ui_scan` | 读当前界面上**能点的**东西，每行「文字 (x,y)」 |
 | `click` | 点目标：给坐标 `(100,200)` 或给界面文字（图标描述也认，如「搜索」） |
 | `tap_xy` | 纯坐标点击（AI 自己看 `ui_scan` 的坐标来点） |
 | `long_press_target` | 长按某个文字/坐标 |
 | `swipe_screen` | 滑动：`up/down/left/right` 或起止坐标 |
 | `type_text` | 往输入框打字；`enter=true` 顺手点「发送」/回车 |
 | `press` | 系统键：`back/home/recents/notifications/quick_settings/lock/power` |
-| `launch_app` | 开应用（名字或包名都行，会问系统认） |
-| `list_apps` | 列出已装应用（名字+包名） |
+| `launch_app` | 开应用（中文名、英文名、包名都认） |
 | `screenshot_vision` | 截图（压缩 JPEG，base64） |
 | `open_url` | 打开网址 |
 | `wechat_type` / `wechat_search_contact` / `wechat_moments` | 微信：发消息 / 找联系人 / 进朋友圈 |
 | `play_song` | 搜网易云的歌（要用 `orpheus://` 打开） |
 
 > 所有定位都走"读屏 + 文字/描述"，**不写死坐标** —— 手机和平板分辨率不一样也能用。
+> `ui_scan` 只列可交互的：点不动的那些字让模型自己看截图，省 token。
+> 列应用不是工具了 —— `launch_app` 直接吃名字，内部按 launcher 列表映射包名
+> （需要 `QUERY_ALL_PACKAGES`，不然 Android 11+ 的包可见性会挡住）。
 
 ## 本地接口
 

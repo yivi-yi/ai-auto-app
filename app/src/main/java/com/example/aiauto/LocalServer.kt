@@ -274,21 +274,21 @@ class LocalServer(
         put("protocolVersion", "2025-03-26")
         put("capabilities", JSONObject().put("tools", JSONObject().put("listChanged", false)))
         put("serverInfo", JSONObject().put("name", "ai-auto").put("version", "1.0"))
-        put("instructions", "控制平板：screen_info 看屏幕尺寸/当前应用；ui_scan 读界面文字和坐标；click 可按文字或坐标点；type_text 输入；press 用 back/home/recents/notifications；launch_app 开应用（名字或包名都行，不确定先 list_apps）；screenshot_vision 截图看画面；swipe_screen 滑动（up/down/left/right 或坐标）。")
+        put("instructions", "控制平板：screen_size 看屏幕多大；current_app 看现在前台是哪个应用；ui_scan 读当前界面上能点的东西（每行「文字 (x,y)」）；click 可按文字或坐标点；tap_xy 纯坐标点；type_text 输入；press 用 back/home/recents/notifications；launch_app 开应用（中文名、英文名、包名都行）；swipe_screen 滑动（up/down/left/right 或坐标）；screenshot_vision 截图看画面，界面上那些点不动的文字就看截图。")
     }
 
     private fun mcpTools(): JSONArray = JSONArray().apply {
-        put(tool("screen_info", "屏幕尺寸 + 当前前台应用包名（算坐标前先看一眼）。", JSONObject()))
+        put(tool("screen_size", "屏幕宽高（像素），算坐标前先看一眼。", JSONObject()))
+        put(tool("current_app", "当前前台应用的包名和名字。", JSONObject()))
         put(tool("click", "点击目标，target 为坐标如 (100,200) 或界面文字（含图标描述，如「搜索」）。", JSONObject().put("target", strProp())))
         put(tool("long_press_target", "长按目标，duration 毫秒。", JSONObject().put("target", strProp()).put("duration", numProp())))
         put(tool("swipe_screen", "滑动屏幕，start 为方向 up/down/left/right 或坐标，end 为终点坐标。", JSONObject().put("start", strProp()).put("end", strProp()).put("duration", numProp())))
         put(tool("type_text", "往当前输入框打字；enter=true 会顺手点「发送」/回车。", JSONObject().put("text", strProp()).put("enter", boolProp())))
         put(tool("press", "系统按键：back / home / recents / notifications / quick_settings / lock / power。", JSONObject().put("key", strProp())))
         put(tool("go_back", "返回键（同 press key=back）。", JSONObject()))
-        put(tool("launch_app", "打开应用，app_name 为名称或包名，page 可选 search。", JSONObject().put("app_name", strProp()).put("page", strProp())))
-        put(tool("list_apps", "列出已装应用（名字+包名）。", JSONObject()))
-        put(tool("ui_scan", "扫描当前界面 UI 树，返回文字+坐标+是否可点击。", JSONObject()))
-        put(tool("tap_xy", "按坐标点击（x/y 像素，参照 screen_info 的宽高）。", JSONObject().put("x", numProp()).put("y", numProp())))
+        put(tool("launch_app", "打开应用。app_name 给中文名（如「微信」）、英文名或包名都行。", JSONObject().put("app_name", strProp()).put("page", strProp())))
+        put(tool("ui_scan", "读当前界面上能点的东西，每行「文字 (x,y)」。只列可交互的，其余文字自己看截图。", JSONObject()))
+        put(tool("tap_xy", "按坐标点击（x/y 像素，参照 screen_size 的宽高）。", JSONObject().put("x", numProp()).put("y", numProp())))
         put(tool("screenshot_vision", "截图并返回压缩后的图片。", JSONObject()))
         put(tool("wechat_type", "微信：点输入框→输入→发送→收起键盘。", JSONObject().put("text", strProp())))
         put(tool("wechat_search_contact", "微信：搜索联系人或群聊并打开。", JSONObject().put("contact", strProp())))
@@ -317,15 +317,13 @@ class LocalServer(
         }
         val content = JSONArray()
         when (name) {
-            "screen_info" -> {
-                val svc = AutoAccessibilityService.instance
-                val size = svc?.screenSize() ?: Pair(0, 0)
-                content.put(text(JSONObject()
-                    .put("width", size.first)
-                    .put("height", size.second)
-                    .put("package", svc?.currentPackage() ?: "")
-                    .put("accessibility", if (AutoAccessibilityService.enabled) "on" else "off")
-                    .toString()))
+            "screen_size" -> {
+                val size = AutoAccessibilityService.instance?.screenSize() ?: Pair(0, 0)
+                content.put(text("宽 ${size.first}，高 ${size.second}"))
+            }
+            "current_app" -> {
+                val pkg = AutoAccessibilityService.instance?.currentPackage().orEmpty()
+                content.put(text(if (pkg.isBlank()) "读不到（可能被输入法或系统窗口盖着）" else "$pkg（${appLabelOf(pkg)}）"))
             }
             "tap_xy" -> {
                 val x = args.optDouble("x", -1.0).toFloat()
@@ -361,7 +359,6 @@ class LocalServer(
                 val ok = onMainGet { AutoAccessibilityService.instance?.globalAction(key) }
                 content.put(text(if (ok == true) "已执行 $key" else "执行失败: $key"))
             }
-            "list_apps" -> content.put(text(listApps()))
             "long_press_target" -> {
                 val t = args.optString("target"); val c = resolveCoord(t); val d = args.optLong("duration", 1000)
                 if (c == null) content.put(text("找不到: $t"))
@@ -395,10 +392,15 @@ class LocalServer(
                     content.put(text(if (ok == true) "已打开 $app 的搜索页" else "打不开 $app 的搜索页"))
                 } else {
                     val ok = onMainGet { AutoAccessibilityService.instance?.openApp(pkg) }
-                    content.put(text(if (ok == true) "已打开 $app" else "没找到应用：$app（解析成包名 $pkg，先 list_apps 看看）"))
+                    content.put(
+                        text(
+                            if (ok == true) "已打开 ${appLabelOf(pkg)}（$pkg）"
+                            else "没找到应用：$app（解析成 $pkg，先 list_apps 看名字）"
+                        )
+                    )
                 }
             }
-            "ui_scan" -> content.put(text(uiBlocking()?.toString() ?: "[]"))
+            "ui_scan" -> content.put(text(uiText(uiBlocking())))
             "screenshot_vision" -> {
                 val f = captureBlocking() as? java.io.File
                 if (f != null) { val b64 = android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP); content.put(JSONObject().put("type", "image").put("data", b64).put("mimeType", "image/jpeg")) }
@@ -449,32 +451,24 @@ class LocalServer(
         }
     }
 
-    /** 应用名 / 包名 → 包名：优先问系统（装了什么就认什么），别名只兜底 */
+    /** 应用名 / 包名 → 包名：先在能启动的应用里按名字找（全等 > 含） > 别名兜底 */
     private fun packageOf(app: String): String {
         val a = app.trim()
         if (a.isEmpty()) return a
+        val ctx = appContext() ?: return a
+        val pm = ctx.packageManager
+        // 直接就是包名（装了才认）
         try {
-            val ctx = appContext() ?: return a
-            val pm = ctx.packageManager
-            // 直接是包名
-            try {
-                pm.getPackageInfo(a, 0)
-                return a
-            } catch (_: Exception) {
-            }
-            val target = a.removeSuffix("app").removeSuffix("APP").lowercase()
-            for (p in pm.getInstalledPackages(0)) {
-                val pkg = p.packageName
-                val ai = p.applicationInfo ?: continue
-                val label = pm.getApplicationLabel(ai).toString()
-                if (label == a || label.lowercase() == a.lowercase() ||
-                    label.lowercase().contains(target) && target.length >= 2
-                ) {
-                    return pkg
-                }
-            }
+            pm.getApplicationInfo(a, 0)
+            return a
         } catch (_: Exception) {
         }
+        val t = a.removeSuffix("app").removeSuffix("APP").trim()
+        val apps = launcherApps(pm)
+        apps.firstOrNull { it.second == t }?.let { return it.first }
+        apps.firstOrNull { it.second.equals(t, true) }?.let { return it.first }
+        apps.firstOrNull { t.length >= 2 && it.second.contains(t) }?.let { return it.first }
+        apps.firstOrNull { t.length >= 2 && it.second.lowercase().contains(t.lowercase()) }?.let { return it.first }
         val known = mapOf(
             "微信" to "com.tencent.mm",
             "抖音" to "com.ss.android.ugc.aweme",
@@ -483,25 +477,50 @@ class LocalServer(
             "哔哩哔哩" to "tv.danmaku.bili",
             "浏览器" to "com.android.browser"
         )
-        return known[a] ?: a
+        return known[a] ?: known[t] ?: a
     }
 
-    /** 列出已装应用（名字+包名），AI 不知道包名时可以先问一次 */
-    private fun listApps(): String {
-        return try {
-            val pm = appContext()?.packageManager ?: return "[]"
-            val arr = JSONArray()
-            for (p in pm.getInstalledPackages(0)) {
-                if (pm.getLaunchIntentForPackage(p.packageName) == null) continue
-                val ai = p.applicationInfo ?: continue
-                arr.put(JSONObject()
-                    .put("label", pm.getApplicationLabel(ai).toString())
-                    .put("package", p.packageName))
+    /** ui_scan 的返回：只留能点的，一行「文字 (x,y)」；点不动的文字让模型自己看截图 */
+    private fun uiText(nodes: org.json.JSONArray?): String {
+        if (nodes == null || nodes.length() == 0) return "(没读到可点的东西)"
+        val sb = StringBuilder()
+        for (i in 0 until nodes.length()) {
+            val o = nodes.getJSONObject(i)
+            if (!o.optBoolean("click") && !o.optBoolean("input")) continue
+            val label = when {
+                !o.optString("text").isNullOrBlank() -> o.optString("text")
+                !o.optString("desc").isNullOrBlank() -> o.optString("desc")
+                o.optBoolean("input") -> "输入框"
+                else -> ""
             }
-            arr.toString()
-        } catch (e: Exception) {
-            "[]"
+            if (label.isBlank()) continue
+            sb.append(label).append(" (").append(o.optInt("x")).append(",").append(o.optInt("y")).append(")\n")
         }
+        return if (sb.isEmpty()) "(没读到可点的东西)" else sb.toString().trim()
+    }
+
+    private fun launcherApps(pm: android.content.pm.PackageManager): List<Pair<String, String>> {
+        return try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+                .addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+            pm.queryIntentActivities(intent, 0)
+                .distinctBy { it.activityInfo?.packageName }
+                .mapNotNull { info ->
+                    val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
+                    Pair(pkg, info.loadLabel(pm).toString())
+                }
+                .sortedBy { it.second }
+                .take(300)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun appLabelOf(pkg: String): String = try {
+        val pm = appContext()?.packageManager ?: return pkg
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    } catch (e: Exception) {
+        pkg
     }
 
     private fun searchUriOf(pkg: String): String {

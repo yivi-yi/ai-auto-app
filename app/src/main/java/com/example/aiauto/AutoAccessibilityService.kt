@@ -267,17 +267,24 @@ class AutoAccessibilityService : AccessibilityService() {
         return f
     }
 
-    /** 打开指定包名的 APP */
+    /** 打开指定包名的 APP；没有启动入口的（有些系统应用）就从 MAIN/LAUNCHER 里捞一个活动来起 */
     fun openApp(pkg: String): Boolean {
-        return try {
+        try {
             val i = packageManager.getLaunchIntentForPackage(pkg)
             if (i != null) {
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(i)
-                true
-            } else false
+                return true
+            }
+            val q = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(pkg)
+            val hit = packageManager.queryIntentActivities(q, 0).firstOrNull() ?: return false
+            val ci = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                .setClassName(hit.activityInfo.packageName, hit.activityInfo.name)
+            ci.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(ci)
+            return true
         } catch (e: Exception) {
-            false
+            return false
         }
     }
 
