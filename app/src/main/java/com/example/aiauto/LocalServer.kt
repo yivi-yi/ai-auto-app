@@ -274,7 +274,7 @@ class LocalServer(
         put("protocolVersion", "2025-03-26")
         put("capabilities", JSONObject().put("tools", JSONObject().put("listChanged", false)))
         put("serverInfo", JSONObject().put("name", "ai-auto").put("version", "1.0"))
-        put("instructions", "控制平板：screen_size 看屏幕多大；current_app 看现在前台是哪个应用；ui_scan 读当前界面上能点的东西（每行「文字 (x,y)」）；click 可按文字或坐标点；tap_xy 纯坐标点；type_text 输入；press 用 back/home/recents/notifications；launch_app 开应用（中文名、英文名、包名都行）；swipe_screen 滑动（up/down/left/right 或坐标）；screenshot_vision 截图看画面，界面上那些点不动的文字就看截图。")
+        put("instructions", "控制平板：screen_size 看屏幕多大；current_app 看现在前台是哪个应用；ui_scan 读当前界面上可交互的东西（每行「文字 (x,y)」，其余文字自己截图看）；click 可按文字或坐标点；tap_xy 纯坐标点；type_text 输入；press 用 back/home/recents/notifications；launch_app 开应用（中文名、英文名、包名都行）；swipe_screen 滑动（up/down/left/right 或坐标）；screenshot_vision 截图看画面，界面上那些点不动的文字就看截图。")
     }
 
     private fun mcpTools(): JSONArray = JSONArray().apply {
@@ -287,7 +287,7 @@ class LocalServer(
         put(tool("press", "系统按键：back / home / recents / notifications / quick_settings / lock / power。", JSONObject().put("key", strProp())))
         put(tool("go_back", "返回键（同 press key=back）。", JSONObject()))
         put(tool("launch_app", "打开应用。app_name 给中文名（如「微信」）、英文名或包名都行。", JSONObject().put("app_name", strProp()).put("page", strProp())))
-        put(tool("ui_scan", "读当前界面上能点的东西，每行「文字 (x,y)」。只列可交互的，其余文字自己看截图。", JSONObject()))
+        put(tool("ui_scan", "读当前界面上可交互的东西（能点的、输入框），每行「文字 (x,y)」。其它界面文字不返回 —— 想读内容用 screenshot_vision 截图。", JSONObject()))
         put(tool("tap_xy", "按坐标点击（x/y 像素，参照 screen_size 的宽高）。", JSONObject().put("x", numProp()).put("y", numProp())))
         put(tool("screenshot_vision", "截图并返回压缩后的图片。", JSONObject()))
         put(tool("wechat_type", "微信：点输入框→输入→发送→收起键盘。", JSONObject().put("text", strProp())))
