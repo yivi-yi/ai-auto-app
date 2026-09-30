@@ -18,6 +18,7 @@ APP 里跑一个本地 HTTP 服务（默认 8080），既能当 REST 接口用�
 | `swipe_screen` | 滑动：`up/down/left/right` 或起止坐标 |
 | `type_text` | 往输入框打字；`enter=true` 顺手点「发送」/回车 |
 | `press` | 系统键：`back/home/recents/notifications/quick_settings/lock/power` |
+| `go_back` | 返回键（同 `press key=back`） |
 | `launch_app` | 开应用（中文名、英文名、包名都认） |
 | `screenshot_vision` | 截图（压缩 JPEG，base64） |
 | `open_url` | 打开网址 |
@@ -25,6 +26,9 @@ APP 里跑一个本地 HTTP 服务（默认 8080），既能当 REST 接口用�
 | `play_song` | 搜网易云的歌（要用 `orpheus://` 打开） |
 
 > 所有定位都走"读屏 + 文字/描述"，**不写死坐标** —— 手机和平板分辨率不一样也能用。
+> 会动界面的工具（`click`/`tap_xy`/`long_press_target`/`swipe_screen`/`type_text`/`press`/`go_back`/`launch_app`/微信那三个/`play_song`/`open_url`）
+> 都带两个**可选**参数：`shot=true` 执行后等 2 秒截图、`scan=true` 执行后等 2 秒返回 UI 树，两个能一起给。
+> 点一下顺手就把结果看了，不用再单独截一次；固定等 2 秒是为了避开动画没走完截到半截界面。
 > `ui_scan` 只列可交互的：点不动的那些字让模型自己看截图，省 token。
 > 列应用不是工具了 —— `launch_app` 直接吃名字，内部按 launcher 列表映射包名
 > （需要 `QUERY_ALL_PACKAGES`，不然 Android 11+ 的包可见性会挡住）。

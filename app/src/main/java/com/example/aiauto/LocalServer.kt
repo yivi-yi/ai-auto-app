@@ -274,36 +274,49 @@ class LocalServer(
         put("protocolVersion", "2025-03-26")
         put("capabilities", JSONObject().put("tools", JSONObject().put("listChanged", false)))
         put("serverInfo", JSONObject().put("name", "ai-auto").put("version", "1.0"))
-        put("instructions", "控制平板：screen_size 看屏幕多大；current_app 看现在前台是哪个应用；ui_scan 读当前界面上可交互的东西（每行「文字 (x,y)」，其余文字自己截图看）；click 可按文字或坐标点；tap_xy 纯坐标点；type_text 输入；press 用 back/home/recents/notifications；launch_app 开应用（中文名、英文名、包名都行）；swipe_screen 滑动（up/down/left/right 或坐标）；screenshot_vision 截图看画面，界面上那些点不动的文字就看截图。")
+        put("instructions", "控制平板：screen_size 看屏幕多大；current_app 看现在前台是哪个应用；ui_scan 读当前界面上可交互的东西（每行「文字 (x,y)」，其余文字自己截图看）；click 可按文字或坐标点；tap_xy 纯坐标点；type_text 输入；press 用 back/home/recents/notifications；launch_app 开应用（中文名、英文名、包名都行）；swipe_screen 滑动（up/down/left/right 或坐标）；screenshot_vision 截图看画面，界面上那些点不动的文字就看截图；click/tap_xy/long_press_target/swipe_screen/type_text/press/go_back/launch_app/微信三个/play_song/open_url 都能自己顺带参数 shot=true（做完等 2 秒截图返回）或 scan=true（做完等 2 秒返回界面文字），一次调用就拿到「已点击 + 结果」，别点完再单独截一次。")
     }
 
     private fun mcpTools(): JSONArray = JSONArray().apply {
         put(tool("screen_size", "屏幕宽高（像素），算坐标前先看一眼。", JSONObject()))
         put(tool("current_app", "当前前台应用的包名和名字。", JSONObject()))
-        put(tool("click", "点击目标，target 为坐标如 (100,200) 或界面文字（含图标描述，如「搜索」）。", JSONObject().put("target", strProp())))
-        put(tool("long_press_target", "长按目标，duration 毫秒。", JSONObject().put("target", strProp()).put("duration", numProp())))
-        put(tool("swipe_screen", "滑动屏幕，start 为方向 up/down/left/right 或坐标，end 为终点坐标。", JSONObject().put("start", strProp()).put("end", strProp()).put("duration", numProp())))
-        put(tool("type_text", "往当前输入框打字；enter=true 会顺手点「发送」/回车。", JSONObject().put("text", strProp()).put("enter", boolProp())))
-        put(tool("press", "系统按键：back / home / recents / notifications / quick_settings / lock / power。", JSONObject().put("key", strProp())))
-        put(tool("go_back", "返回键（同 press key=back）。", JSONObject()))
-        put(tool("launch_app", "打开应用。app_name 给中文名（如「微信」）、英文名或包名都行。", JSONObject().put("app_name", strProp()).put("page", strProp())))
+        put(tool("click", "点击目标，target 为坐标如 (100,200) 或界面文字（含图标描述，如「搜索」）$THEN_HINT", withThen(JSONObject().put("target", strProp()))))
+        put(tool("long_press_target", "长按目标，duration 毫秒$THEN_HINT", withThen(JSONObject().put("target", strProp()).put("duration", numProp()))))
+        put(tool("swipe_screen", "滑动屏幕，start 为方向 up/down/left/right 或坐标，end 为终点坐标$THEN_HINT", withThen(JSONObject().put("start", strProp()).put("end", strProp()).put("duration", numProp()))))
+        put(tool("type_text", "往当前输入框打字；enter=true 会顺手点「发送」/回车$THEN_HINT", withThen(JSONObject().put("text", strProp()).put("enter", boolProp()))))
+        put(tool("press", "系统按键：back / home / recents / notifications / quick_settings / lock / power$THEN_HINT", withThen(JSONObject().put("key", strProp()))))
+        put(tool("go_back", "返回键（同 press key=back）$THEN_HINT", withThen(JSONObject())))
+        put(tool("launch_app", "打开应用。app_name 给中文名（如「微信」）、英文名或包名都行$THEN_HINT", withThen(JSONObject().put("app_name", strProp()).put("page", strProp()))))
         put(tool("ui_scan", "读当前界面上可交互的东西（能点的、输入框），每行「文字 (x,y)」。其它界面文字不返回 —— 想读内容用 screenshot_vision 截图。", JSONObject()))
-        put(tool("tap_xy", "按坐标点击（x/y 像素，参照 screen_size 的宽高）。", JSONObject().put("x", numProp()).put("y", numProp())))
+        put(tool("tap_xy", "按坐标点击（x/y 像素，参照 screen_size 的宽高）$THEN_HINT", withThen(JSONObject().put("x", numProp()).put("y", numProp()))))
         put(tool("screenshot_vision", "截图并返回压缩后的图片。", JSONObject()))
-        put(tool("wechat_type", "微信：点输入框→输入→发送→收起键盘。", JSONObject().put("text", strProp())))
-        put(tool("wechat_search_contact", "微信：搜索联系人或群聊并打开。", JSONObject().put("contact", strProp())))
-        put(tool("wechat_moments", "微信：进入朋友圈。", JSONObject()))
-        put(tool("play_song", "搜索并播放网易云歌曲。", JSONObject().put("keyword", strProp())))
-        put(tool("open_url", "用浏览器打开网址。", JSONObject().put("url", strProp())))
+        put(tool("wechat_type", "微信：点输入框→输入→发送→收起键盘$THEN_HINT", withThen(JSONObject().put("text", strProp()))))
+        put(tool("wechat_search_contact", "微信：搜索联系人或群聊并打开$THEN_HINT", withThen(JSONObject().put("contact", strProp()))))
+        put(tool("wechat_moments", "微信：进入朋友圈$THEN_HINT", withThen(JSONObject())))
+        put(tool("play_song", "搜索并播放网易云歌曲$THEN_HINT", withThen(JSONObject().put("keyword", strProp()))))
+        put(tool("open_url", "用浏览器打开网址$THEN_HINT", withThen(JSONObject().put("url", strProp()))))
     }
 
     private fun tool(name: String, desc: String, props: JSONObject): JSONObject {
         val schema = JSONObject().put("type", "object").put("properties", props)
         val required = JSONArray()
-        for (k in props.keys()) { if (k != "duration" && k != "end" && k != "page" && k != "enter") required.put(k) }
+        for (k in props.keys()) { if (k != "duration" && k != "end" && k != "page" && k != "enter" && k != "shot" && k != "scan") required.put(k) }
         if (required.length() > 0) schema.put("required", required)
         return JSONObject().put("name", name).put("description", desc).put("inputSchema", schema)
     }
+
+    /** 会动界面的那几个 —— 只有它们才值得「执行完再补一眼」 */
+    private val actTools = setOf(
+        "click", "tap_xy", "long_press_target", "swipe_screen", "type_text", "press", "go_back",
+        "launch_app", "wechat_type", "wechat_search_contact", "wechat_moments", "play_song", "open_url"
+    )
+
+    /** 行动工具统一挂的两个可选尾巴：做完别急着回，等他 2 秒再补截图 / 补 UI 树 */
+    private fun withThen(props: JSONObject): JSONObject =
+        props.put("shot", boolProp()).put("scan", boolProp())
+
+    /** 拼在行动工具描述末尾的提示语 */
+    private val THEN_HINT = "。shot=执行后 2 秒截图，scan=执行后 2 秒扫界面，两个可以一起给"
 
     private fun numProp() = JSONObject().put("type", "number")
     private fun strProp() = JSONObject().put("type", "string")
@@ -413,7 +426,35 @@ class LocalServer(
             "open_url" -> { val u = args.optString("url").let { if (it.startsWith("http")) it else "https://$it" }; runOnMain { AutoAccessibilityService.instance?.openUri(u) }; content.put(text("已打开")) }
             else -> content.put(text("未知工具"))
         }
+        settleThen(name, args, content)
         return JSONObject().put("content", content).put("isError", false)
+    }
+
+    /**
+     * shot / scan：行动工具做完先等 2 秒（动画、页面跳转得走完，马上截多半是半截界面），
+     * 再把截图 / UI 树并进这一次返回 —— 省掉「点一下再单独截一次」的往返。
+     */
+    private fun settleThen(name: String, args: JSONObject, content: JSONArray) {
+        if (name !in actTools) return
+        val shot = args.optBoolean("shot", false)
+        val scan = args.optBoolean("scan", false)
+        if (!shot && !scan) return
+        try {
+            Thread.sleep(2000)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return
+        }
+        if (scan) content.put(text("[2 秒后界面]\n" + uiText(uiBlocking())))
+        if (shot) {
+            val f = captureBlocking() as? java.io.File
+            if (f != null) {
+                val b64 = android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)
+                content.put(JSONObject().put("type", "image").put("data", b64).put("mimeType", "image/jpeg"))
+            } else {
+                content.put(text("(截图失败)"))
+            }
+        }
     }
 
     private fun text(s: String) = JSONObject().put("type", "text").put("text", s)
