@@ -464,35 +464,40 @@ class LocalServer(
             "open_url" -> { val u = args.optString("url").let { if (it.startsWith("http")) it else "https://$it" }; runOnMain { AutoAccessibilityService.instance?.openUri(u) }; content.put(text("已打开")) }
             else -> content.put(text("未知工具"))
         }
-        settleThen(name, args, content)
-        return JSONObject().put("content", content).put("isError", false)
+        val out = settleThen(name, args, content)
+        return JSONObject().put("content", out).put("isError", false)
     }
 
     /**
      * shot / scan：行动工具做完先等 2 秒（动画、页面跳转得走完，马上截多半是半截界面），
      * 再把截图 / UI 树并进这一次返回 —— 省掉「点一下再单独截一次」的往返。
      */
-    private fun settleThen(name: String, args: JSONObject, content: JSONArray) {
-        if (name !in actTools) return
+    private fun settleThen(name: String, args: JSONObject, content: JSONArray): JSONArray {
+        if (name !in actTools) return content
         val shot = args.optBoolean("shot", false)
         val scan = args.optBoolean("scan", false)
-        if (!shot && !scan) return
+        if (!shot && !scan) return content
         try {
             Thread.sleep(2000)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
-            return
+            return content
         }
-        if (scan) content.put(text("[2 秒后界面]\n" + uiText(uiBlocking())))
+        var img: JSONObject? = null
         if (shot) {
             val f = captureBlocking() as? java.io.File
             if (f != null) {
                 val b64 = android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)
-                content.put(JSONObject().put("type", "image").put("data", b64).put("mimeType", "image/jpeg"))
-            } else {
-                content.put(text("(截图失败)"))
+                img = JSONObject().put("type", "image").put("data", b64).put("mimeType", "image/jpeg")
             }
         }
+        // 图片放第一段：有的客户端只认第一条 content，放后面就等于没给
+        val out = JSONArray()
+        img?.let { out.put(it) }
+        for (i in 0 until content.length()) out.put(content.get(i))
+        if (scan) out.put(text("[2 秒后界面]\n" + uiText(uiBlocking())))
+        if (shot && img == null) out.put(text("(截图失败)"))
+        return out
     }
 
     private fun text(s: String) = JSONObject().put("type", "text").put("text", s)
