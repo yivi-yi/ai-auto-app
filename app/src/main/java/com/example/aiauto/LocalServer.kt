@@ -299,7 +299,7 @@ class LocalServer(
         put("protocolVersion", "2025-03-26")
         put("capabilities", JSONObject().put("tools", JSONObject().put("listChanged", false)))
         put("serverInfo", JSONObject().put("name", "ai-auto").put("version", "1.0"))
-        put("instructions", "控制平板：screen_size 看屏幕多大；current_app 看现在前台是哪个应用；ui_scan 读当前界面上可交互的东西（每行「文字 (x,y)」，其余文字自己截图看）；click 可按文字或坐标点；tap_xy 纯坐标点；type_text 输入（enter=true 输入完直接回车发送）；press 用 back/home/recents/notifications；launch_app 开应用（中文名、英文名、包名都行）；swipe_screen 滑动（up/down/left/right 或坐标）；screenshot_vision 截图看画面，界面上那些点不动的文字就看截图；click/tap_xy/long_press_target/swipe_screen/type_text/press/go_back/launch_app/微信三个/play_song/open_url 都能自己顺带参数 shot=true（做完等 2 秒截图返回）或 scan=true（做完等 2 秒返回界面文字），一次调用就拿到「已点击 + 结果」，别点完再单独截一次。")
+        put("instructions", "控制平板：screen_size 看屏幕多大；current_app 看现在前台是哪个应用；ui_scan 读当前界面上可交互的东西（每行「文字 (x,y)」，其余文字自己截图看）；click 可按文字或坐标点；tap_xy 纯坐标点；type_text 输入（enter=true 输入完直接回车发送）；press 用 back/home/recents/notifications；launch_app 开应用（中文名、英文名、包名都行）；swipe_screen 滑动（up/down/left/right 或坐标）；screenshot_vision 截图看画面，界面上那些点不动的文字就看截图；click/tap_xy/long_press_target/swipe_screen/type_text/press/go_back/launch_app/微信三个/play_song/open_url 都能自己带两个可选参数：shot=true（做完等 2 秒截图跟结果一起返回）、scan=true（做完等 2 秒把界面文字跟结果一起返回），一次调用就拿到「已点击 + 结果」，别点完再单独截一次。")
     }
 
     private fun mcpTools(): JSONArray = JSONArray().apply {
@@ -337,11 +337,18 @@ class LocalServer(
     )
 
     /** 行动工具统一挂的两个可选尾巴：做完别急着回，等他 2 秒再补截图 / 补 UI 树 */
-    private fun withThen(props: JSONObject): JSONObject =
-        props.put("shot", boolProp()).put("scan", boolProp())
+    private fun withThen(props: JSONObject): JSONObject = props
+        .put(
+            "shot", JSONObject().put("type", "boolean")
+                .put("description", "可选。传 true：这个动作做完等 2 秒，自动截一张图跟结果一起返回（省掉再单独调一次截图）")
+        )
+        .put(
+            "scan", JSONObject().put("type", "boolean")
+                .put("description", "可选。传 true：这个动作做完等 2 秒，把界面上能点的元素+坐标一起返回（省掉再单独扫一次）")
+        )
 
     /** 拼在行动工具描述末尾的提示语 */
-    private val THEN_HINT = "。shot=执行后 2 秒截图，scan=执行后 2 秒扫界面，两个可以一起给"
+    private val THEN_HINT = "。可选参数：shot=true 做完等 2 秒截图一并返回，scan=true 做完等 2 秒返回界面文字，两个能一起给"
 
     private fun numProp() = JSONObject().put("type", "number")
     private fun strProp() = JSONObject().put("type", "string")
