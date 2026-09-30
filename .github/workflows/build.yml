@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,10 +17,26 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v3
+      # 指定 gradle 版本，别赌 runner 上装的是哪个（AGP 8.7.3 要 8.9+）
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
       - name: Build debug APK
-        run: gradle :app:assembleDebug
+        run: gradle :app:assembleDebug --no-daemon --console=plain
       - uses: actions/upload-artifact@v4
         with:
           name: apk
           path: app/build/outputs/apk/debug/*.apk
+      # 顺便把包推到 apk 分支，这样不用登录也能直接下载
+      - name: Push APK to apk branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -e
+          mkdir -p apk-out
+          cp app/build/outputs/apk/debug/app-debug.apk apk-out/app-debug.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B apk
+          git add -f apk-out/app-debug.apk
+          git commit -m "CI 出的包 ${GITHUB_SHA::7}" || true
+          git push -f origin apk
