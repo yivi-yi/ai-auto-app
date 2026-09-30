@@ -37,7 +37,8 @@ APP 里跑一个本地 HTTP 服务（默认 8080），既能当 REST 接口用�
 
 - `GET /status` → `{"accessibility":"on","capture":"off","screenshot":"accessibility","port":8080,"width":..,"height":..,"package":"..","token_required":false}`
   （`screenshot` 三条路：`accessibility` 无障碍自带 / `projection` 录屏授权 / `none`；端口被占会在 `error` 里说明）
-- `GET /ui` → UI 树（文字/坐标/可点）
+- `GET /ui` → **只列能交互的**，纯文本一行一个：`发送 (1220,2380)`（图标给 contentDescription、输入框标「输入框」）
+- `GET /ui?full=1` → 完整 UI 树数组（`{text,desc,x,y,click,input,scroll}`，x/y 是元素中心）
 - `POST /action` → `{"type":"tap","x":100,"y":200}`、`{"type":"swipe",...}`、`{"type":"back"}`、
   `{"type":"home"}`、`{"type":"recents"}`、`{"type":"notifications"}`、`{"type":"clickText","text":"发送"}`、
   `{"type":"inputTextSend","text":"你好"}`、`{"type":"openApp","package":"com.tencent.mm"}`

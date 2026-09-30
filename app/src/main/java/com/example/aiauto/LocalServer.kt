@@ -119,7 +119,9 @@ class LocalServer(
                 } else if (path == "/ui") {
                     if (noA11y(it)) return
                     val arr = uiBlocking()
-                    send(it, 200, "application/json", arr?.toString() ?: "[]")
+                    // 默认只给能点的：一行「文字 (x,y)」——点的时候本来也只吃坐标
+                    if (query.contains("full")) send(it, 200, "application/json", arr?.toString() ?: "[]")
+                    else send(it, 200, "text/plain; charset=utf-8", uiText(arr))
                 } else if (path == "/clickNode" && method == "POST") {
                     if (noA11y(it)) return
                     val j = JSONObject(String(body))
