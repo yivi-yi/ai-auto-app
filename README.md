@@ -16,7 +16,7 @@ APP 里跑一个本地 HTTP 服务（默认 8080），既能当 REST 接口用�
 | `tap_xy` | 纯坐标点击（AI 自己看 `ui_scan` 的坐标来点） |
 | `long_press_target` | 长按某个文字/坐标 |
 | `swipe_screen` | 滑动：`up/down/left/right` 或起止坐标 |
-| `type_text` | 往输入框打字；`enter=true` 顺手点「发送」/回车 |
+| `type_text` | 往输入框打字；`enter=true` 输入完**直接回车发送**（走键盘那个回车键，不点界面上的发送按钮），不带就只输入 |
 | `press` | 系统键：`back/home/recents/notifications/quick_settings/lock/power` |
 | `go_back` | 返回键（同 `press key=back`） |
 | `launch_app` | 开应用（中文名、英文名、包名都认） |

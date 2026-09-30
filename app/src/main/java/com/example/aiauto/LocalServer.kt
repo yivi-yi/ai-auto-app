@@ -274,7 +274,7 @@ class LocalServer(
         put("protocolVersion", "2025-03-26")
         put("capabilities", JSONObject().put("tools", JSONObject().put("listChanged", false)))
         put("serverInfo", JSONObject().put("name", "ai-auto").put("version", "1.0"))
-        put("instructions", "控制平板：screen_size 看屏幕多大；current_app 看现在前台是哪个应用；ui_scan 读当前界面上可交互的东西（每行「文字 (x,y)」，其余文字自己截图看）；click 可按文字或坐标点；tap_xy 纯坐标点；type_text 输入；press 用 back/home/recents/notifications；launch_app 开应用（中文名、英文名、包名都行）；swipe_screen 滑动（up/down/left/right 或坐标）；screenshot_vision 截图看画面，界面上那些点不动的文字就看截图；click/tap_xy/long_press_target/swipe_screen/type_text/press/go_back/launch_app/微信三个/play_song/open_url 都能自己顺带参数 shot=true（做完等 2 秒截图返回）或 scan=true（做完等 2 秒返回界面文字），一次调用就拿到「已点击 + 结果」，别点完再单独截一次。")
+        put("instructions", "控制平板：screen_size 看屏幕多大；current_app 看现在前台是哪个应用；ui_scan 读当前界面上可交互的东西（每行「文字 (x,y)」，其余文字自己截图看）；click 可按文字或坐标点；tap_xy 纯坐标点；type_text 输入（enter=true 输入完直接回车发送）；press 用 back/home/recents/notifications；launch_app 开应用（中文名、英文名、包名都行）；swipe_screen 滑动（up/down/left/right 或坐标）；screenshot_vision 截图看画面，界面上那些点不动的文字就看截图；click/tap_xy/long_press_target/swipe_screen/type_text/press/go_back/launch_app/微信三个/play_song/open_url 都能自己顺带参数 shot=true（做完等 2 秒截图返回）或 scan=true（做完等 2 秒返回界面文字），一次调用就拿到「已点击 + 结果」，别点完再单独截一次。")
     }
 
     private fun mcpTools(): JSONArray = JSONArray().apply {
@@ -283,7 +283,7 @@ class LocalServer(
         put(tool("click", "点击目标，target 为坐标如 (100,200) 或界面文字（含图标描述，如「搜索」）$THEN_HINT", withThen(JSONObject().put("target", strProp()))))
         put(tool("long_press_target", "长按目标，duration 毫秒$THEN_HINT", withThen(JSONObject().put("target", strProp()).put("duration", numProp()))))
         put(tool("swipe_screen", "滑动屏幕，start 为方向 up/down/left/right 或坐标，end 为终点坐标$THEN_HINT", withThen(JSONObject().put("start", strProp()).put("end", strProp()).put("duration", numProp()))))
-        put(tool("type_text", "往当前输入框打字；enter=true 会顺手点「发送」/回车$THEN_HINT", withThen(JSONObject().put("text", strProp()).put("enter", boolProp()))))
+        put(tool("type_text", "往当前输入框打字；enter=true 输入完直接回车发送（键盘回车键），不带 enter 就只输入不发送$THEN_HINT", withThen(JSONObject().put("text", strProp()).put("enter", boolProp()))))
         put(tool("press", "系统按键：back / home / recents / notifications / quick_settings / lock / power$THEN_HINT", withThen(JSONObject().put("key", strProp()))))
         put(tool("go_back", "返回键（同 press key=back）$THEN_HINT", withThen(JSONObject())))
         put(tool("launch_app", "打开应用。app_name 给中文名（如「微信」）、英文名或包名都行$THEN_HINT", withThen(JSONObject().put("app_name", strProp()).put("page", strProp()))))
@@ -389,11 +389,17 @@ class LocalServer(
             "type_text" -> {
                 val t = args.optString("text")
                 val enter = args.optBoolean("enter", false)
-                val ok = onMainGet {
-                    if (enter) AutoAccessibilityService.instance?.inputTextAndSend(t)
-                    else AutoAccessibilityService.instance?.inputText(t)
+                val ok = onMainGet { AutoAccessibilityService.instance?.inputText(t) }
+                if (ok != true) {
+                    content.put(text("没找到输入框"))
+                } else if (!enter) {
+                    content.put(text("已输入"))
+                } else {
+                    // 等文字先落进输入框再回车（HTTP 线程 sleep，不卡界面）
+                    try { Thread.sleep(500) } catch (e: InterruptedException) { Thread.currentThread().interrupt() }
+                    val sent = onMainGet { AutoAccessibilityService.instance?.pressEnter() }
+                    content.put(text(if (sent == true) "已输入并回车发送" else "已输入，但回车/发送没成功"))
                 }
-                content.put(text(if (ok == true) (if (enter) "已输入并发送" else "已输入") else "没找到输入框"))
             }
             "go_back" -> { onMainGet { AutoAccessibilityService.instance?.back() }; content.put(text("已返回")) }
             "launch_app" -> {

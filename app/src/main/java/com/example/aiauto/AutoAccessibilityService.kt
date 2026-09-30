@@ -202,20 +202,37 @@ class AutoAccessibilityService : AccessibilityService() {
         return root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditable(root)
     }
 
-    /** 输入文字并回车（找「发送」/「搜索」按钮，找不到就发 IME 回车） */
+    /** 输入文字后直接回车发送（键盘上那个回车/发送键），实在不行才退回点界面上的「发送」 */
     fun inputTextAndSend(text: String, sendLabel: String = ""): Boolean {
         if (!inputText(text)) return false
-        main.postDelayed({
-            val labels = mutableListOf("发送", "Send", "send")
-            if (sendLabel.isNotBlank()) labels.add(0, sendLabel)
-            for (l in labels) {
-                if (clickNode(l)) return@postDelayed
-            }
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                findInput()?.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
-            }
-        }, 500)
+        main.postDelayed({ pressEnter(sendLabel) }, 500)
         return true
+    }
+
+    /**
+     * 回车发送：优先 IME 回车（ACTION_IME_ENTER），其次点输入法键盘上那个回车/发送键
+     * —— 输入法键盘是独立窗口，rootInActiveWindow 看不到，得遍历 windows 找；
+     * 最后才退回找应用界面里的「发送」按钮。
+     */
+    fun pressEnter(sendLabel: String = ""): Boolean {
+        val n = findInput()
+        if (android.os.Build.VERSION.SDK_INT >= 30 && n != null) {
+            if (n.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) return true
+        }
+        val keys = mutableListOf<String>()
+        if (sendLabel.isNotBlank()) keys.add(sendLabel)
+        keys.addAll(listOf("回车", "发送", "Enter", "Return", "Done", "完成", "搜索", "Search", "Send", "Go"))
+        for (w in windows) {
+            val r = w.root ?: continue
+            if (r.packageName?.toString() == packageName) continue
+            for (k in keys) {
+                if (findClickable(r, k)?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
+            }
+        }
+        for (k in keys) {
+            if (clickNode(k)) return true
+        }
+        return false
     }
 
     /** 无障碍自带的截图（API 30+，配置里 canTakeScreenshot=true）——
