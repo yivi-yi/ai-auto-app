@@ -41,6 +41,8 @@ APP 里跑一个本地 HTTP 服务（默认 8080），既能当 REST 接口用�
 - `POST /action` → `{"type":"tap","x":100,"y":200}`、`{"type":"swipe",...}`、`{"type":"back"}`、
   `{"type":"home"}`、`{"type":"recents"}`、`{"type":"notifications"}`、`{"type":"clickText","text":"发送"}`、
   `{"type":"inputTextSend","text":"你好"}`、`{"type":"openApp","package":"com.tencent.mm"}`
+  （`type` 认不出来会直接回 `{"ok":false,"msg":"不认识的 type「xxx」，可用：tap/swipe/…"}`，不再闷声回 ok；
+  别名也认：`click`=`tap`、`input`/`input_text`/`set_text`=`inputText`、`send`=`inputTextSend`、`click_text`=`clickText`、`open_app`=`openApp`）
 - `POST /clickNode` → `{"text":"发送"}` 按文字点
 - `POST /capture` + `GET /screenshot` → 截图（PNG/JPEG 字节）
 - `POST /set_token` → `{"token":"..."}` 设置局域网口令，**只能从本机调用**（留空 = 关掉校验）

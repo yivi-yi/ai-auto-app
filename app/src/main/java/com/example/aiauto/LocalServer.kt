@@ -128,6 +128,13 @@ class LocalServer(
                 } else if (path == "/action" && method == "POST") {
                     if (noA11y(it)) return
                     val j = JSONObject(String(body))
+                    val raw = j.optString("type").trim()
+                    if (normalizeType(raw) !in actionTypes) {
+                        // 认不出就别回 ok —— 不然调用方试一百遍也不知道自己写错了
+                        val tail = if (raw.isEmpty()) "" else "「$raw」"
+                        send(it, 200, "application/json", Json.err("不认识的 type$tail，可用：${actionTypes.joinToString("/")}"))
+                        return
+                    }
                     runAction(j)
                     send(it, 200, "application/json", Json.ok("ok"))
                 } else if (path == "/capture" && method == "POST") {
@@ -167,8 +174,24 @@ class LocalServer(
         return true
     }
 
+    /** /action 认的 type，也是报错时要列出来的那份 */
+    private val actionTypes = setOf(
+        "tap", "swipe", "back", "home", "recents", "notifications", "lock", "global",
+        "inputText", "inputTextSend", "clickText", "openApp"
+    )
+
+    /** 顺手认几个常见别名，省得调用方一个个试 */
+    private fun normalizeType(t: String): String = when (t) {
+        "click" -> "tap"
+        "input", "input_text", "set_text" -> "inputText"
+        "input_send", "send" -> "inputTextSend"
+        "click_text" -> "clickText"
+        "open_app", "launch" -> "openApp"
+        else -> t
+    }
+
     private fun runAction(j: JSONObject) {
-        val type = j.optString("type")
+        val type = normalizeType(j.optString("type"))
         main.post {
             val svc = AutoAccessibilityService.instance
             when (type) {
